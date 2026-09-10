@@ -106,4 +106,114 @@ The first post-implementation typecheck correctly identified that dynamic `TAbst
 
 ## Concerns
 
-- Snapshot immutability is intentionally structural: the snapshot object and arrays are frozen, while Obsidian-owned `TFile`/`TFolder` instances remain live references so their paths stay compatible with Vault event updates.
+- `VaultSnapshot` now deliberately exposes descriptors rather than `TFile`/`TFolder` handles. Task 5 should use the documented descriptor fields for navigation and notes, and retain any required Vault access through its own adapter/service boundary.
+
+## Review fix round 1
+
+### Root cause
+
+- The append guard only re-parsed text and could still modify a `TFile` that had moved outside the configured notes folder.
+- The original index exposed live `TFile`/`TFolder` references, mutated shared maps before asynchronous reads completed, and did not preserve mapped descendants on folder rename.
+- A plain-object MIME map accepted inherited keys such as `constructor`.
+
+### RED
+
+Command:
+
+```text
+npm test -- tests/note-service.test.ts tests/vault-index.test.ts --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Observed expected failures before the correction:
+
+```text
+× NoteService > does not append when the live matched file moved outside the notes folder during its final read
+→ promise resolved instead of rejecting
+
+× NoteService > writes only supported attachments below the configured directory and returns a relative link
+→ promise resolved for MIME type "constructor"
+
+× VaultIndex > remaps folder-rename descendants and re-evaluates deer-note membership
+→ expected [ '小鹿笔记/原文.md' ], received []
+
+× VaultIndex > removes the old entry when a Markdown file is renamed to a non-Markdown path
+→ expected [], received the renamed .txt entry
+
+× VaultIndex > serializes delayed classifications so a later delete cannot be undone by an older modify
+→ deleted deer-note was restored
+
+× VaultIndex > does not register, publish, or retain event listeners when disposed during initialization
+→ initialization published after disposal
+
+× VaultIndex > does not publish or mutate a snapshot when disposed during a delayed modify
+→ snapshot changed after disposal
+
+× VaultIndex > publishes deeply frozen value descriptors whose old paths do not mutate after rename
+→ Object.isFrozen(descriptor) was false
+
+Test Files  2 failed (2)
+Tests  8 failed | 9 passed (17)
+```
+
+### Fix
+
+- Before append, `NoteService` now confirms the live Vault entry is the exact matched file, remains Markdown, and remains beneath `notesFolder`.
+- Attachment MIME lookup now uses `Map.get`.
+- `VaultIndex` serializes source events through one queue and checks a lifecycle generation after every async boundary. Initialization assembles local maps before committing them, and disposal invalidates all pending continuations and unregisters registered event references.
+- Folder rename remaps each private descendant handle by its current path and re-parses it when it enters or remains in `notesFolder`. File rename removes the old key before considering whether the new path is Markdown.
+- Published snapshots now use only frozen primitive descriptors; raw Obsidian handles remain private.
+
+Exact public descriptor types:
+
+```ts
+interface VaultFolderDescriptor { path: string; name: string }
+interface VaultFileDescriptor { path: string; name: string; basename: string; extension: string }
+interface DeerNoteDescriptor extends VaultFileDescriptor {
+  title: string; created: string; updated: string; source: string; tags: readonly string[]
+}
+interface VaultSnapshot {
+  rootFolders: readonly VaultFolderDescriptor[];
+  markdownFiles: readonly VaultFileDescriptor[];
+  deerNotes: readonly DeerNoteDescriptor[];
+}
+```
+
+All descriptor objects and arrays, including `DeerNoteDescriptor.tags`, are frozen.
+
+### GREEN
+
+Focused command:
+
+```text
+npm test -- tests/note-service.test.ts tests/vault-index.test.ts --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Output:
+
+```text
+✓ tests/note-service.test.ts (8 tests)
+✓ tests/vault-index.test.ts (9 tests)
+Test Files  2 passed (2)
+Tests  17 passed (17)
+```
+
+Typecheck command:
+
+```text
+npm run typecheck
+```
+
+The command exited with status 0 and no TypeScript diagnostics.
+
+Complete-suite command:
+
+```text
+npm test -- --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Output:
+
+```text
+Test Files  7 passed (7)
+Tests  41 passed (41)
+```

@@ -82,6 +82,13 @@ class MemoryVault implements NoteVaultAdapter {
     return file;
   }
 
+  move(file: TFile, path: string): void {
+    this.entries.delete(file.path);
+    (file as { path: string }).path = path;
+    this.entries.set(path, file);
+    this.refreshChildren();
+  }
+
   markdownFiles(): MemoryFile[] {
     return [...this.entries.values()].filter((entry): entry is MemoryFile => (
       "extension" in entry && entry.extension === "md"
@@ -205,11 +212,36 @@ describe("NoteService", () => {
     expect((first as MemoryFile).content).toBe("# 用户刚修改的普通笔记");
   });
 
+  it("does not append when the live matched file moved outside the notes folder during its final read", async () => {
+    const vault = new MemoryVault();
+    const service = new NoteService(vault, DEFAULT_SETTINGS);
+    const first = await service.saveExcerptNote({
+      source: "Inbox/a.md",
+      excerpt: "原文 A",
+      body: "想法 A",
+      date: new Date(2026, 8, 10, 9, 0, 0)
+    });
+    vault.beforeRead = (readCount) => {
+      if (readCount === 2) {
+        vault.move(first, "收件箱/被移动.md");
+      }
+    };
+
+    await expect(service.saveExcerptNote({
+      source: "Inbox/a.md",
+      excerpt: "原文 B",
+      body: "想法 B",
+      date: new Date(2026, 8, 10, 10, 0, 0)
+    })).rejects.toThrow("已不再匹配");
+    expect(vault.calls.some((call) => call.startsWith("modify:"))).toBe(false);
+  });
+
   it("writes only supported attachments below the configured directory and returns a relative link", async () => {
     const vault = new MemoryVault();
     const service = new NoteService(vault, DEFAULT_SETTINGS);
 
     await expect(service.saveAttachment(attachment("image/svg+xml", 4))).rejects.toThrow("不支持");
+    await expect(service.saveAttachment(attachment("constructor", 4))).rejects.toThrow("不支持");
     await expect(service.saveAttachment(attachment("image/png", 20 * 1024 * 1024 + 1))).rejects.toThrow("20 MiB");
     expect(vault.calls).toEqual([]);
 

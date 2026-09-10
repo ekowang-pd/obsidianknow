@@ -17,9 +17,12 @@ type Listener = (...args: any[]) => unknown;
 
 class MemoryIndexVault implements VaultIndexAdapter {
   readonly reads: string[] = [];
+  readonly released: EventRef[] = [];
   private readonly entries = new Map<string, TAbstractFile>();
   private readonly listeners = new Map<VaultEvent, Set<Listener>>();
   private readonly root = { path: "", children: [] } as unknown as MemoryFolder;
+  private deferNextRead = false;
+  private releaseRead: (() => void) | undefined;
 
   getRoot(): TFolder {
     return this.root;
@@ -33,6 +36,13 @@ class MemoryIndexVault implements VaultIndexAdapter {
 
   async cachedRead(file: TFile): Promise<string> {
     this.reads.push(file.path);
+    if (this.deferNextRead) {
+      this.deferNextRead = false;
+      await new Promise<void>((resolve) => {
+        this.releaseRead = resolve;
+      });
+      this.releaseRead = undefined;
+    }
     return (file as MemoryFile).content;
   }
 
@@ -44,6 +54,7 @@ class MemoryIndexVault implements VaultIndexAdapter {
   }
 
   offref(ref: EventRef): void {
+    this.released.push(ref);
     const { event, listener } = ref as EventRef & { event: VaultEvent; listener: Listener };
     this.listeners.get(event)?.delete(listener);
   }
@@ -79,9 +90,34 @@ class MemoryIndexVault implements VaultIndexAdapter {
   async emitRename(file: TAbstractFile, oldPath: string, newPath: string): Promise<void> {
     this.entries.delete(oldPath);
     (file as { path: string }).path = newPath;
+    if ("extension" in file) {
+      (file as { extension: string }).extension = newPath.split(".").pop() ?? "";
+    }
     this.entries.set(newPath, file);
     this.refreshChildren();
     await this.emit("rename", file, oldPath);
+  }
+
+  async emitFolderRename(folder: TFolder, oldPath: string, newPath: string): Promise<void> {
+    const entries = [...this.entries.entries()];
+    for (const [path, entry] of entries) {
+      if (path === oldPath || path.startsWith(`${oldPath}/`)) {
+        this.entries.delete(path);
+        (entry as { path: string }).path = `${newPath}${path.slice(oldPath.length)}`;
+        this.entries.set(entry.path, entry);
+      }
+    }
+    this.refreshChildren();
+    await this.emit("rename", folder, oldPath);
+  }
+
+  deferOneRead(): () => void {
+    this.deferNextRead = true;
+    return () => this.releaseRead?.();
+  }
+
+  listenerCount(): number {
+    return [...this.listeners.values()].reduce((count, listeners) => count + listeners.size, 0);
   }
 
   private makeFile(path: string, content: string): MemoryFile {
@@ -189,5 +225,108 @@ describe("VaultIndex", () => {
     await vault.emitCreate(file);
     expect(snapshots).toHaveLength(1);
     await expect(index.initialize()).rejects.toThrow("disposed");
+  });
+
+  it("remaps folder-rename descendants and re-evaluates deer-note membership", async () => {
+    const vault = new MemoryIndexVault();
+    const oldFolder = vault.addFolder("暂存") as TFolder;
+    vault.addMarkdown("暂存/原文.md", deerNote("Moved"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+
+    await vault.emitFolderRename(oldFolder, "暂存", "小鹿笔记");
+
+    expect(index.getSnapshot().markdownFiles.map((file) => file.path)).toEqual(["小鹿笔记/原文.md"]);
+    expect(index.getSnapshot().deerNotes.map((file) => file.path)).toEqual(["小鹿笔记/原文.md"]);
+  });
+
+  it("removes the old entry when a Markdown file is renamed to a non-Markdown path", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    const file = vault.addMarkdown("小鹿笔记/a.md", deerNote("A"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+
+    await vault.emitRename(file, "小鹿笔记/a.md", "小鹿笔记/a.txt");
+
+    expect(index.getSnapshot().markdownFiles).toEqual([]);
+    expect(index.getSnapshot().deerNotes).toEqual([]);
+  });
+
+  it("serializes delayed classifications so a later delete cannot be undone by an older modify", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    const file = vault.addMarkdown("小鹿笔记/a.md", "# 用户笔记");
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    (file as MemoryFile).content = deerNote("A");
+    const releaseRead = vault.deferOneRead();
+
+    const modifying = vault.emitModify(file);
+    await Promise.resolve();
+    const deleting = vault.emitDelete(file);
+    releaseRead();
+    await Promise.all([modifying, deleting]);
+
+    expect(index.getSnapshot().markdownFiles).toEqual([]);
+    expect(index.getSnapshot().deerNotes).toEqual([]);
+  });
+
+  it("does not register, publish, or retain event listeners when disposed during initialization", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    vault.addMarkdown("小鹿笔记/a.md", deerNote("A"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    const snapshots = [] as ReturnType<typeof index.getSnapshot>[];
+    index.subscribe((snapshot) => snapshots.push(snapshot));
+    const releaseRead = vault.deferOneRead();
+
+    const initializing = index.initialize();
+    await Promise.resolve();
+    index.dispose();
+    releaseRead();
+    await initializing;
+
+    expect(snapshots).toEqual([]);
+    expect(index.getSnapshot().markdownFiles).toEqual([]);
+    expect(vault.listenerCount()).toBe(0);
+    expect(vault.released).toHaveLength(0);
+  });
+
+  it("does not publish or mutate a snapshot when disposed during a delayed modify", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    const file = vault.addMarkdown("小鹿笔记/a.md", deerNote("A"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    const before = index.getSnapshot();
+    const releaseRead = vault.deferOneRead();
+    (file as MemoryFile).content = "# 已转为用户笔记";
+
+    const modifying = vault.emitModify(file);
+    await Promise.resolve();
+    index.dispose();
+    releaseRead();
+    await modifying;
+
+    expect(index.getSnapshot()).toBe(before);
+    expect(index.getSnapshot().deerNotes.map((entry) => entry.path)).toEqual(["小鹿笔记/a.md"]);
+    expect(vault.released).toHaveLength(4);
+  });
+
+  it("publishes deeply frozen value descriptors whose old paths do not mutate after rename", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    const file = vault.addMarkdown("小鹿笔记/a.md", deerNote("A"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    const beforeRename = index.getSnapshot();
+
+    expect(Object.isFrozen(beforeRename.markdownFiles[0])).toBe(true);
+    expect(Object.isFrozen(beforeRename.deerNotes[0])).toBe(true);
+    await vault.emitRename(file, "小鹿笔记/a.md", "小鹿笔记/b.md");
+
+    expect(beforeRename.markdownFiles[0]?.path).toBe("小鹿笔记/a.md");
+    expect(index.getSnapshot().markdownFiles[0]?.path).toBe("小鹿笔记/b.md");
   });
 });

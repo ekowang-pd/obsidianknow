@@ -12,12 +12,12 @@ import {
 
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
-const ATTACHMENT_EXTENSIONS: Readonly<Record<string, string>> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp"
-};
+const ATTACHMENT_EXTENSIONS = new Map<string, string>([
+  ["image/png", "png"],
+  ["image/jpeg", "jpg"],
+  ["image/gif", "gif"],
+  ["image/webp", "webp"]
+]);
 
 export interface NoteVaultAdapter {
   getAbstractFileByPath(path: string): TAbstractFile | null;
@@ -89,7 +89,15 @@ export class NoteService {
 
     const latest = await this.vault.cachedRead(matching);
     const meta = parseDeerNote(latest);
-    if (!meta || meta.source !== input.source || meta.created !== localDate(input.date)) {
+    const liveFile = this.vault.getAbstractFileByPath(matching.path);
+    if (
+      liveFile !== matching ||
+      !isMarkdownFile(liveFile) ||
+      !isWithinFolder(liveFile.path, this.notesFolder) ||
+      !meta ||
+      meta.source !== input.source ||
+      meta.created !== localDate(input.date)
+    ) {
       throw new Error("关联笔记已不再匹配，请重试保存");
     }
 
@@ -102,7 +110,7 @@ export class NoteService {
   }
 
   async saveAttachment(file: AttachmentInput): Promise<string> {
-    const extension = ATTACHMENT_EXTENSIONS[file.type];
+    const extension = ATTACHMENT_EXTENSIONS.get(file.type);
     if (!extension) {
       throw new Error("不支持的附件类型");
     }
