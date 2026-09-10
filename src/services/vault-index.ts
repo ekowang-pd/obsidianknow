@@ -46,6 +46,17 @@ interface IndexedDeerNote {
   meta: DeerNoteMeta;
 }
 
+interface DeerNoteRead {
+  current: boolean;
+  meta: DeerNoteMeta | null;
+}
+
+interface FileState {
+  file: TFile;
+  path: string;
+  extension: string;
+}
+
 export class VaultIndex {
   private readonly notesFolder: string;
   private readonly rootFolders = new Map<string, TFolder>();
@@ -85,13 +96,15 @@ export class VaultIndex {
       }
     }
     for (const file of this.vault.getMarkdownFiles()) {
-      markdownFiles.set(file.path, file);
-      const meta = await this.readDeerNote(file);
+      const read = await this.readDeerNote(file);
       if (!this.isActive(lifecycle)) {
         return;
       }
-      if (meta) {
-        deerNotes.set(file.path, { file, meta });
+      if (read.current) {
+        markdownFiles.set(file.path, file);
+        if (read.meta) {
+          deerNotes.set(file.path, { file, meta: read.meta });
+        }
       }
     }
     if (!this.isActive(lifecycle)) {
@@ -157,12 +170,11 @@ export class VaultIndex {
       return;
     }
 
-    const meta = await this.readDeerNote(entry);
-    if (!this.isActive(lifecycle)) {
+    const read = await this.readDeerNote(entry);
+    if (!this.isActive(lifecycle) || !read.current) {
       return;
     }
-    this.markdownFiles.set(entry.path, entry);
-    this.setDeerNote(entry, meta);
+    this.replaceMarkdownFile(entry, read.meta);
     this.publish();
   }
 
@@ -171,12 +183,11 @@ export class VaultIndex {
       return;
     }
 
-    const meta = await this.readDeerNote(entry);
-    if (!this.isActive(lifecycle)) {
+    const read = await this.readDeerNote(entry);
+    if (!this.isActive(lifecycle) || !read.current) {
       return;
     }
-    this.markdownFiles.set(entry.path, entry);
-    this.setDeerNote(entry, meta);
+    this.replaceMarkdownFile(entry, read.meta);
     if (isWithinFolder(entry.path, this.notesFolder)) {
       this.publish();
     }
@@ -204,16 +215,18 @@ export class VaultIndex {
       return;
     }
 
-    const meta = isMarkdownFile(entry) ? await this.readDeerNote(entry) : null;
+    const file = isFile(entry) ? entry : null;
+    const read = file && isMarkdownFile(file)
+      ? await this.readDeerNote(file)
+      : { current: false, meta: null };
     if (!this.isActive(lifecycle)) {
       return;
     }
-    const removed = this.removeFile(oldPath);
-    if (isMarkdownFile(entry)) {
-      this.markdownFiles.set(entry.path, entry);
-      this.setDeerNote(entry, meta);
+    const removed = this.removeFile(oldPath, file ?? undefined);
+    if (read.current && file) {
+      this.replaceMarkdownFile(file, read.meta);
     }
-    if (removed || isMarkdownFile(entry)) {
+    if (removed || read.current) {
       this.publish();
     }
   }
@@ -225,7 +238,7 @@ export class VaultIndex {
     const updated = await Promise.all(descendants.map(async ([oldFilePath, file]) => ({
       oldFilePath,
       file,
-      meta: await this.readDeerNote(file)
+      read: await this.readDeerNote(file)
     })));
     if (!this.isActive(lifecycle)) {
       return;
@@ -236,10 +249,11 @@ export class VaultIndex {
       this.rootFolders.set(folder.path, folder);
       changed = true;
     }
-    for (const { oldFilePath, file, meta } of updated) {
-      this.removeFile(oldFilePath);
-      this.markdownFiles.set(file.path, file);
-      this.setDeerNote(file, meta);
+    for (const { oldFilePath, file, read } of updated) {
+      this.removeFile(oldFilePath, file);
+      if (read.current) {
+        this.replaceMarkdownFile(file, read.meta);
+      }
       changed = true;
     }
     if (changed) {
@@ -247,24 +261,47 @@ export class VaultIndex {
     }
   }
 
-  private async readDeerNote(file: TFile): Promise<DeerNoteMeta | null> {
-    if (!isWithinFolder(file.path, this.notesFolder)) {
-      return null;
+  private async readDeerNote(file: TFile): Promise<DeerNoteRead> {
+    const state = captureFileState(file);
+    if (!isWithinFolder(state.path, this.notesFolder)) {
+      return { current: this.isCurrentMarkdownFile(state), meta: null };
     }
-    return parseDeerNote(await this.vault.cachedRead(file));
+    const meta = parseDeerNote(await this.vault.cachedRead(file));
+    return { current: this.isCurrentMarkdownFile(state), meta };
   }
 
-  private setDeerNote(file: TFile, meta: DeerNoteMeta | null): void {
+  private replaceMarkdownFile(file: TFile, meta: DeerNoteMeta | null): void {
+    this.removeFileByIdentity(file);
+    this.markdownFiles.set(file.path, file);
     if (meta) {
       this.deerNotes.set(file.path, { file, meta });
-    } else {
-      this.deerNotes.delete(file.path);
     }
   }
 
-  private removeFile(path: string): boolean {
+  private removeFile(path: string, file?: TFile): boolean {
     const removed = this.markdownFiles.delete(path);
-    return this.deerNotes.delete(path) || removed;
+    const removedDeer = this.deerNotes.delete(path);
+    return this.removeFileByIdentity(file) || removedDeer || removed;
+  }
+
+  private removeFileByIdentity(file: TFile | undefined): boolean {
+    if (!file) {
+      return false;
+    }
+    let removed = false;
+    for (const [path, indexed] of this.markdownFiles) {
+      if (indexed === file) {
+        this.markdownFiles.delete(path);
+        removed = true;
+      }
+    }
+    for (const [path, indexed] of this.deerNotes) {
+      if (indexed.file === file) {
+        this.deerNotes.delete(path);
+        removed = true;
+      }
+    }
+    return removed;
   }
 
   private removeFolder(path: string): boolean {
@@ -280,6 +317,13 @@ export class VaultIndex {
 
   private isActive(lifecycle: number): boolean {
     return !this.disposed && lifecycle === this.lifecycle;
+  }
+
+  private isCurrentMarkdownFile(state: FileState): boolean {
+    return isMarkdownFile(state.file) &&
+      state.file.path === state.path &&
+      state.file.extension === state.extension &&
+      this.vault.getMarkdownFiles().some((file) => file === state.file);
   }
 
   private publish(): void {
@@ -342,12 +386,20 @@ function pathName(path: string): string {
   return path.slice(path.lastIndexOf("/") + 1);
 }
 
+function captureFileState(file: TFile): FileState {
+  return { file, path: file.path, extension: file.extension };
+}
+
 function isFolder(entry: TAbstractFile): entry is TFolder {
   return "children" in entry;
 }
 
 function isMarkdownFile(entry: TAbstractFile): entry is TFile {
-  return "extension" in entry && typeof entry.extension === "string" && entry.extension.toLowerCase() === "md";
+  return isFile(entry) && entry.extension.toLowerCase() === "md";
+}
+
+function isFile(entry: TAbstractFile): entry is TFile {
+  return "extension" in entry && typeof entry.extension === "string";
 }
 
 function isRootFolder(path: string): boolean {

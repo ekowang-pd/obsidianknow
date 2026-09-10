@@ -217,3 +217,69 @@ Output:
 Test Files  7 passed (7)
 Tests  41 passed (41)
 ```
+
+## Review fix round 2
+
+### Root cause
+
+`handleModify` retained a live `TFile` reference while awaiting `cachedRead`. If that file was renamed to a non-Markdown path before the read completed, the stale continuation inserted it under its new `.txt` path. The queued rename then removed only its stated old key, leaving the stale descriptor.
+
+### RED
+
+Command:
+
+```text
+npm test -- tests/vault-index.test.ts --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Observed failure with a deferred `modify` followed by `rename("小鹿笔记/a.md", "小鹿笔记/a.txt")` before the read resolved:
+
+```text
+× VaultIndex > does not retain stale entries when a delayed modify overlaps a rename to non-Markdown
+→ expected [ { path: '小鹿笔记/a.txt', …(3) } ] to deeply equal []
+
+Test Files  1 failed (1)
+Tests  1 failed | 9 passed (10)
+```
+
+### Fix
+
+Every asynchronous deer-note classification now captures the file object, path, and extension before reading. Before committing the result, the index verifies that the same object still has that path and extension and is still returned by `getMarkdownFiles()`. Rename removal now also removes every private Markdown/deer map key whose value refers to the renamed file object, in addition to `oldPath`. A stale classification therefore cannot commit after a rename, while immutable descriptors remain unchanged.
+
+### GREEN
+
+Focused command:
+
+```text
+npm test -- tests/vault-index.test.ts tests/note-service.test.ts --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Output:
+
+```text
+✓ tests/vault-index.test.ts (10 tests)
+✓ tests/note-service.test.ts (8 tests)
+Test Files  2 passed (2)
+Tests  18 passed (18)
+```
+
+Typecheck command:
+
+```text
+npm run typecheck
+```
+
+The command exited with status 0 and no TypeScript diagnostics.
+
+Complete-suite command:
+
+```text
+npm test -- --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Output:
+
+```text
+Test Files  7 passed (7)
+Tests  42 passed (42)
+```

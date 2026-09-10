@@ -272,6 +272,24 @@ describe("VaultIndex", () => {
     expect(index.getSnapshot().deerNotes).toEqual([]);
   });
 
+  it("does not retain stale entries when a delayed modify overlaps a rename to non-Markdown", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("小鹿笔记");
+    const file = vault.addMarkdown("小鹿笔记/a.md", deerNote("A"));
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    const releaseRead = vault.deferOneRead();
+
+    const modifying = vault.emitModify(file);
+    await Promise.resolve();
+    const renaming = vault.emitRename(file, "小鹿笔记/a.md", "小鹿笔记/a.txt");
+    releaseRead();
+    await Promise.all([modifying, renaming]);
+
+    expect(index.getSnapshot().markdownFiles).toEqual([]);
+    expect(index.getSnapshot().deerNotes).toEqual([]);
+  });
+
   it("does not register, publish, or retain event listeners when disposed during initialization", async () => {
     const vault = new MemoryIndexVault();
     vault.addFolder("小鹿笔记");
