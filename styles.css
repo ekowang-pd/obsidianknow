@@ -96,9 +96,11 @@
 .deer-reader-content table { display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; }
 .deer-reader-content :is(td,th) { padding:8px 12px; border:1px solid var(--deer-border); }
 .deer-selection-menu { position:absolute; z-index:3; padding:4px; border:1px solid var(--deer-border); border-radius:8px; background:var(--background-primary); box-shadow:var(--shadow-s); }
+.deer-selection-menu { box-sizing:border-box; overflow:auto; }
+.deer-selection-menu-pending { visibility:hidden; }
 .deer-selection-menu button { min-height:36px; padding:6px 14px; }
 .deer-selection-note { position:absolute; z-index:4; inset:auto 24px 24px; max-height:calc(100% - 48px); width:min(560px,calc(100% - 48px)); margin-inline:auto; padding:24px; overflow:auto; border:1px solid var(--deer-border); border-radius:12px; background:var(--background-primary); box-shadow:0 16px 64px #0003; }
-.deer-reader:has(.deer-selection-note)::after { content:""; position:absolute; inset:0; background:#0002; z-index:3; }
+.deer-reader.deer-excerpt-open::after { content:""; position:absolute; inset:0; background:#0002; z-index:3; }
 .deer-excerpt-heading { margin:0; font-size:18px; font-weight:600; }
 .deer-excerpt-source { font-size:12px; color:var(--text-muted); margin:4px 0 20px; overflow-wrap:anywhere; }
 .deer-excerpt { margin:0 0 20px; max-height:128px; padding:12px 16px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; border-left:2px solid var(--interactive-accent); color:var(--text-muted); background:var(--background-secondary); font-size:14px; line-height:1.8; }

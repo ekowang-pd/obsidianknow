@@ -1,7 +1,7 @@
 {
   "name": "deer-notes",
-  "version": "0.1.0",
-  "description": "A local-first Obsidian plugin for quick notes, reading, excerpts, and recent note activity.",
+  "version": "0.1.1",
+  "description": "Capture quick notes, read Markdown, save excerpts, and explore your knowledge through a local-first dashboard.",
   "license": "MIT",
   "scripts": {
     "preview": "node preview/server.mjs",
@@ -18,6 +18,7 @@
     "@types/codemirror": "5.60.8",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^22.10.5",
+    "dompurify": "^3.4.15",
     "esbuild": "^0.24.2",
     "jsdom": "^30.0.1",
     "lucide": "^1.44.0",

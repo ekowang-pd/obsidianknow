@@ -6,10 +6,11 @@ import { NoteService } from '../src/services/note-service';
 import { DEFAULT_SETTINGS } from '../src/settings';
 import { createNoteMarkdown } from '../src/domain/notes';
 import { PreviewVault, STORAGE_KEY } from './vault';
+import type { StoredEntry } from './vault';
 import { Notice } from './obsidian';
 
 const folders = ['小鹿笔记', '阅读素材', '项目灵感'];
-const seed = folders.map(path => ({ path, folder: true })) as any[];
+const seed: StoredEntry[] = folders.map(path => ({ path, folder: true }));
 seed.push({ path: '阅读素材/如何把阅读变成自己的知识.md', content: '# 如何把阅读变成自己的知识\n\n阅读的价值，不只在于读过多少内容，更在于留下多少自己的理解。\n\n## 从一句话开始\n\n遇到让你停下来思考的句子，可以选中这段文字，点击浮层中的“做笔记”。写下它与你正在做的事情有什么关联。\n\n> 笔记不是文章的缩影，而是思考发生过的证据。\n\n## 一个简单的记录习惯\n\n1. 保存触动你的原文。\n2. 用自己的话解释它。\n3. 写下下一步可以尝试的行动。\n\n同一篇文章当天的多次摘录，会汇总到同一篇笔记中。' });
 seed.push({ path: '项目灵感/下一版界面想法.md', content: '# 下一版界面想法\n\n在这里试试搜索、阅读和摘录。\n\n- 列表信息是否清楚？\n- 快速笔记工具栏是否顺手？\n- 窄屏下的导航是否好用？\n\n把你的修改意见直接发到左侧对话。' });
 for (const [index, body] of ['今天，从记录一个小想法开始。\n\n把脑海中一闪而过的念头留住，之后再慢慢整理。 #日常', '阅读之后，留一句自己的理解。\n\n连接已有的经验，比收集更多摘抄更重要。 #阅读', '让工具顺着思考的节奏工作。\n\n界面越清楚，越能把注意力留给内容。 #产品'].entries()) {
@@ -22,7 +23,7 @@ vault.beforeWrite = async () => {
   const choice = mode.value;
   if (choice === 'normal') return;
   if (choice === 'fail') mode.value = 'normal';
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => window.setTimeout(resolve, 2000));
   if (choice === 'fail') throw new Error('模拟保存失败；原文和草稿已保留，请重试');
 };
 const index = new VaultIndex(vault as never, DEFAULT_SETTINGS);
@@ -53,6 +54,6 @@ document.querySelector('#reset')!.addEventListener('click', () => {
 document.querySelector('#export')!.addEventListener('click', () => {
   const content = vault.getMarkdownFiles().filter(file => file.path.startsWith('小鹿笔记/')).map(file => `<!-- ${file.path} -->\n\n${file.content}`).join('\n\n---\n\n');
   const url = URL.createObjectURL(new Blob([content], { type: 'text/markdown;charset=utf-8' }));
-  const link = document.createElement('a'); link.href = url; link.download = '小鹿笔记-预览导出.md'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const link = document.createElement('a'); link.href = url; link.download = '小鹿笔记-预览导出.md'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 new EventSource('/esbuild').addEventListener('change', () => location.reload());

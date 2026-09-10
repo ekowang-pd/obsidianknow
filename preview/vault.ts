@@ -4,18 +4,28 @@ export interface PreviewFile {
 }
 interface PreviewFolder { path: string; name: string; children: Entry[] }
 type Entry = PreviewFile | PreviewFolder;
-interface StoredEntry { path: string; folder?: boolean; content?: string; dataUrl?: string; ctime?: number; mtime?: number }
+export interface StoredEntry { path: string; folder?: boolean; content?: string; dataUrl?: string; ctime?: number; mtime?: number }
+function isStoredEntry(value: unknown): value is StoredEntry {
+  if (!value || typeof value !== 'object' || !('path' in value) || typeof value.path !== 'string') return false;
+  return (!('folder' in value) || typeof value.folder === 'boolean')
+    && (!('content' in value) || typeof value.content === 'string')
+    && (!('dataUrl' in value) || typeof value.dataUrl === 'string')
+    && (!('ctime' in value) || typeof value.ctime === 'number')
+    && (!('mtime' in value) || typeof value.mtime === 'number');
+}
 export const STORAGE_KEY = 'deer-notes-browser-preview-v1';
 
 export class PreviewVault {
   private entries = new Map<string, Entry>();
   private root: PreviewFolder = { path: '', name: '', children: [] };
-  private listeners = new Set<{ event: string; callback: (...args: any[]) => unknown }>();
+  private listeners = new Set<{ event: string; callback: (entry: Entry) => unknown }>();
   private writes = new Map<string, Promise<unknown>>();
   beforeWrite: () => Promise<void> = async () => {};
   constructor(private storage: Storage, seed: StoredEntry[]) {
     const saved = storage.getItem(STORAGE_KEY);
-    const records: StoredEntry[] = saved ? JSON.parse(saved) : seed;
+    const parsed: unknown = saved ? JSON.parse(saved) : seed;
+    if (!Array.isArray(parsed) || !parsed.every(isStoredEntry)) throw new Error('预览数据格式无效，请先备份浏览器数据');
+    const records: StoredEntry[] = parsed;
     for (const record of records) {
       if (record.folder) this.entries.set(record.path, { path: record.path, name: record.path.split('/').pop()!, children: [] });
       else this.entries.set(record.path, this.makeFile(record.path, record.content ?? '', record.dataUrl, record.ctime, record.mtime));
@@ -27,8 +37,8 @@ export class PreviewVault {
   getAllLoadedFiles(): Entry[] { return [...this.entries.values()]; }
   getMarkdownFiles(): PreviewFile[] { return this.getAllLoadedFiles().filter((file): file is PreviewFile => 'extension' in file && file.extension === 'md'); }
   async cachedRead(file: PreviewFile): Promise<string> { return file.content; }
-  on(event: string, callback: (...args: any[]) => unknown) { const ref = { event, callback }; this.listeners.add(ref); return ref; }
-  offref(ref: { event: string; callback: (...args: any[]) => unknown }): void { this.listeners.delete(ref); }
+  on(event: string, callback: (entry: Entry) => unknown) { const ref = { event, callback }; this.listeners.add(ref); return ref; }
+  offref(ref: { event: string; callback: (entry: Entry) => unknown }): void { this.listeners.delete(ref); }
   async createFolder(path: string): Promise<PreviewFolder> {
     if (this.entries.has(path)) throw new Error('目录已存在');
     const folder = { path, name: path.split('/').pop()!, children: [] };

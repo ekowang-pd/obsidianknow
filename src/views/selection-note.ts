@@ -76,6 +76,7 @@ export class SelectionNoteController {
       if (backwards && current === items[0]) { event.preventDefault(); items[items.length - 1].focus(); }
       else if (!backwards && current === items[items.length - 1]) { event.preventDefault(); items[0].focus(); }
     });
+    this.host.classList.add("deer-excerpt-open");
     this.host.append(root); input.focus();
   }
 
@@ -85,6 +86,7 @@ export class SelectionNoteController {
     const wasOpen = this.root !== null;
     this.cleanups.splice(0).forEach(cleanup => cleanup());
     this.root?.remove(); this.root = null;
+    this.host.classList.remove("deer-excerpt-open");
     this.saving = false;
     if (wasOpen) this.restoreFocus();
   }

@@ -86,7 +86,7 @@ export default class DeerNotesPlugin extends Plugin {
     if (!view) {
       await this.activateView();
       view = this.app.workspace.getLeavesOfType(VIEW_TYPE_DEER_NOTES)
-        .map(leaf => leaf.view).find(candidate => candidate instanceof DeerNotesView) as DeerNotesView | undefined;
+        .map(leaf => leaf.view).find((candidate): candidate is DeerNotesView => candidate instanceof DeerNotesView);
     }
     await view?.openReader(path);
   }

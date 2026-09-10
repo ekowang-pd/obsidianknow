@@ -13,7 +13,8 @@ export interface VaultIndexAdapter {
   getMarkdownFiles(): TFile[];
   getAbstractFileByPath(path: string): TAbstractFile | null;
   cachedRead(file: TFile): Promise<string>;
-  on(event: VaultEvent, callback: (...args: any[]) => unknown): EventRef;
+  on(event: Exclude<VaultEvent, "rename">, callback: (entry: TAbstractFile) => unknown): EventRef;
+  on(event: "rename", callback: (entry: TAbstractFile, oldPath: string) => unknown): EventRef;
   offref(ref: EventRef): void;
 }
 

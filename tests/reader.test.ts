@@ -224,10 +224,10 @@ describe("ReaderController", () => {
     vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frame = callback; return 7; });
     ui.select().dispatchEvent(new Event("pointerup", { bubbles: true }));
     const menu = ui.host.querySelector<HTMLElement>(".deer-selection-menu")!;
-    expect(menu.style.visibility).toBe("hidden");
+    expect(menu.classList.contains("deer-selection-menu-pending")).toBe(true);
     measurable = true; expect(frame).toBeTypeOf("function"); frame(0);
     expect([parseFloat(menu.style.left), parseFloat(menu.style.top)]).toEqual([172, 294]);
-    expect(menu.style.visibility).toBe("visible");
+    expect(menu.classList.contains("deer-selection-menu-pending")).toBe(false);
   });
   it.each(["close", "dispose"] as const)("cancels pending menu placement before the animation frame on %s", async action => {
     const ui = setup(); await ui.reader.open("docs/source.md");

@@ -1,4 +1,6 @@
 import MarkdownIt from 'markdown-it';
+import DOMPurify from 'dompurify';
+import type { PreviewVault } from './vault';
 import { createElement, NotebookPen, Folder, Notebook, ChartNoAxesCombined, FileText, Tag, Image, Bold, List, ListOrdered, Eye, Plus, Search, ChevronRight, ArrowLeft } from 'lucide';
 export { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
@@ -14,10 +16,11 @@ export class Component {
     this.cleanups.splice(0).forEach(cleanup => cleanup());
   }
 }
+interface PreviewApp { vault: PreviewVault }
 export class ItemView extends Component {
-  app: any;
+  app: PreviewApp;
   contentEl: HTMLElement;
-  constructor(public leaf: any) { super(); this.app = leaf.app; this.contentEl = leaf.contentEl; }
+  constructor(public leaf: { app: PreviewApp; contentEl: HTMLElement }) { super(); this.app = leaf.app; this.contentEl = leaf.contentEl; }
 }
 // Settings UI is supplied by Obsidian in the plugin; this harness mounts the shared view directly.
 export class Plugin extends Component {}
@@ -26,7 +29,7 @@ export class Setting {}
 export class Notice {
   constructor(message: string) {
     const element = document.createElement('div'); element.className = 'preview-notice'; element.textContent = message;
-    document.querySelector('#notices')?.append(element); setTimeout(() => element.remove(), 5000);
+    document.querySelector('#notices')?.append(element); window.setTimeout(() => element.remove(), 5000);
   }
 }
 const icons = { 'notebook-pen': NotebookPen, folder: Folder, notebook: Notebook, 'chart-no-axes-combined': ChartNoAxesCombined,
@@ -37,11 +40,11 @@ export function setIcon(element: HTMLElement, name: string): void {
 }
 const markdown = new MarkdownIt({ html: false, breaks: false });
 export class MarkdownRenderer {
-  static async render(app: any, text: string, target: HTMLElement, source: string, _component: Component): Promise<void> {
+  static async render(app: PreviewApp, text: string, target: HTMLElement, source: string, _component: Component): Promise<void> {
     const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
-      .replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, (_all, path, title) => `[${title ?? path}](<${encodeURI(path)}>)`);
-    // Raw HTML is disabled in the parser; default protocol validation remains enabled.
-    target.innerHTML = markdown.render(body);
+      .replace(/\[\[([^\]|\n]+)(?:\|([^\]\n]+))?\]\]/g, (_all: string, path: string, title: string | undefined) => `[${title ?? path}](<${encodeURI(path)}>)`);
+    // Disable raw HTML, then sanitize the rendered output before inserting a DOM fragment.
+    target.replaceChildren(DOMPurify.sanitize(markdown.render(body), { RETURN_DOM_FRAGMENT: true }));
     for (const link of target.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       const href = link.getAttribute('href')!;
       if (!/^[a-z][a-z\d+.-]*:/i.test(href)) { link.classList.add('internal-link'); link.dataset.href = decodeURI(href); }

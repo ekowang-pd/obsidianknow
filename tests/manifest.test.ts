@@ -37,6 +37,7 @@ describe("release contract", () => {
     expect(manifest.isDesktopOnly).toBe(false);
     expect(manifest.description).toEqual(expect.any(String));
     expect((manifest.description as string).length).toBeLessThanOrEqual(250);
+    expect(manifest.description).not.toMatch(/obsidian/i);
     expect((manifest.description as string).endsWith(".")).toBe(true);
     expect(versions[manifest.version as string]).toBe(manifest.minAppVersion);
     expect(packageJson.version).toBe(manifest.version);

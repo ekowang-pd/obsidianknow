@@ -21,7 +21,7 @@ export interface AppendNoteInput {
 }
 
 export interface FrontmatterCodec {
-  parse(yaml: string): unknown;
+  parse(this: void, yaml: string): unknown;
   stringify(properties: Record<string, unknown>): string;
 }
 

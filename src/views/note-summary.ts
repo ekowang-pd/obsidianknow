@@ -7,7 +7,7 @@ export function noteSummary(markdown: string, title: string, tags: readonly stri
     .replace(/```[^\n]*\n([\s\S]*?)```/g, "$1")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_all, path, label) => label ?? path)
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_all: string, path: string, label: string | undefined) => label ?? path)
     .replace(/^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?)/gm, "")
     .replace(/[*`~]/g, "")
     .replace(/<[^>]*>/g, "");
