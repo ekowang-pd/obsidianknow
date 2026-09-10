@@ -21,7 +21,7 @@ export class ReaderController {
   constructor(private app: App, private host: HTMLElement, private notes: () => NoteService) {}
 
   async open(filePath: string): Promise<void> {
-    if (this.disposed) return;
+    if (this.disposed || this.editor?.isSaving) return;
     const trigger = this.root ? this.trigger : this.host.ownerDocument.activeElement as HTMLElement | null;
     this.close(); this.trigger = trigger;
     const revision = ++this.revision;
@@ -97,6 +97,7 @@ export class ReaderController {
   }
 
   close(): void {
+    if (this.editor?.isSaving && !this.disposed) return;
     const wasOpen = this.root !== null;
     this.revision += 1;
     this.hideMenu(); this.editor?.dispose(); this.editor = null;

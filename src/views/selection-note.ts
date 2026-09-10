@@ -7,10 +7,12 @@ export class SelectionNoteController {
   private cleanups: (() => void)[] = [];
   private disposed = false;
   private revision = 0;
+  private saving = false;
 
   constructor(private host: HTMLElement, private getNotes: () => NoteService, private restoreFocus: () => void) {}
 
   get isOpen(): boolean { return this.root !== null; }
+  get isSaving(): boolean { return this.saving; }
 
   open(anchor: SelectionAnchor, filePath: string): void {
     if (this.disposed || this.root) return;
@@ -21,6 +23,7 @@ export class SelectionNoteController {
     root.setAttribute("role", "dialog");
     root.setAttribute("aria-label", "摘录笔记");
     root.setAttribute("aria-modal", "true");
+    root.tabIndex = -1;
     this.root = root;
     const excerpt = this.element(root, "blockquote", "deer-excerpt", anchor.excerpt);
     excerpt.setAttribute("aria-label", "原文摘录（只读）");
@@ -30,19 +33,24 @@ export class SelectionNoteController {
     const error = this.element(root, "p", "deer-error");
     error.hidden = true;
     error.setAttribute("role", "alert");
+    const status = this.element(root, "p", "deer-muted");
+    status.setAttribute("role", "status");
+    status.hidden = true;
     const actions = this.element(root, "div", "deer-excerpt-actions");
     const cancel = this.element(actions, "button", "", "取消");
     const save = this.element(actions, "button", "mod-cta", "保存笔记");
     cancel.type = save.type = "button";
-    let busy = false;
     this.listen(cancel, "click", () => this.close());
     this.listen(save, "click", () => {
-      if (busy) return;
-      busy = true; save.disabled = true; input.disabled = true; error.hidden = true;
-      cancel.focus();
+      if (this.saving) return;
+      this.saving = true; save.disabled = true; input.disabled = true; cancel.disabled = true; error.hidden = true;
+      root.setAttribute("aria-busy", "true");
+      status.textContent = "正在保存，请稍候…"; status.hidden = false;
+      root.focus();
       void notes.saveExcerptNote({ source: filePath, excerpt: anchor.excerpt, body: input.value, date: new Date() })
         .then(() => {
           if (revision !== this.revision || this.disposed) return;
+          this.saving = false;
           this.close(); new Notice("笔记已保存");
         })
         .catch((failure: unknown) => {
@@ -52,12 +60,14 @@ export class SelectionNoteController {
         })
         .finally(() => {
           if (revision !== this.revision || this.disposed) return;
-          busy = false; save.disabled = false; input.disabled = false; input.focus();
+          this.saving = false; save.disabled = false; input.disabled = false; cancel.disabled = false;
+          root.setAttribute("aria-busy", "false"); status.hidden = true; input.focus();
         });
     });
     this.listen(root, "keydown", event => {
       if ((event as KeyboardEvent).key !== "Tab") return;
       const items = [input, cancel, save].filter(item => !item.disabled);
+      if (!items.length) { event.preventDefault(); root.focus(); return; }
       const current = root.ownerDocument.activeElement;
       const backwards = (event as KeyboardEvent).shiftKey;
       if (backwards && current === items[0]) { event.preventDefault(); items[items.length - 1].focus(); }
@@ -67,10 +77,12 @@ export class SelectionNoteController {
   }
 
   close(): void {
+    if (this.saving && !this.disposed) return;
     this.revision += 1;
     const wasOpen = this.root !== null;
     this.cleanups.splice(0).forEach(cleanup => cleanup());
     this.root?.remove(); this.root = null;
+    this.saving = false;
     if (wasOpen) this.restoreFocus();
   }
 

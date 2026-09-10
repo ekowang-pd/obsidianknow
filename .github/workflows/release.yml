@@ -34,9 +34,17 @@ jobs:
           fi
           package_version="$(node -p "require('./package.json').version")"
           manifest_version="$(node -p "JSON.parse(require('fs').readFileSync('manifest.json', 'utf8')).version")"
-          test "$tag" = "$package_version"
-          test "$tag" = "$manifest_version"
+          # Obsidian metadata keeps a numeric version; prerelease labels live on the Git tag.
+          release_version="${tag%%-*}"
+          test "$release_version" = "$package_version"
+          test "$release_version" = "$manifest_version"
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" main.js manifest.json styles.css --generate-notes
+        shell: bash
+        run: |
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          gh release create "${GITHUB_REF_NAME}" main.js manifest.json styles.css --verify-tag --generate-notes "${flags[@]}"

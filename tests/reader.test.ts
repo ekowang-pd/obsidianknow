@@ -132,17 +132,50 @@ describe("ReaderController", () => {
     expect(ui.host.scrollTop).toBe(0); expect(ui.host.scrollLeft).toBe(0);
     ui.reader.close(); expect(ui.host.scrollTop).toBe(240); expect(ui.host.scrollLeft).toBe(12);
   });
-  it("keeps a newer editor untouched when a previous save completes", async () => {
+  it.each(["cancel", "escape", "close-reader", "open-reader"] as const)("preserves a pending excerpt through %s and allows retry after failure", async action => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    let fail!: (error: Error) => void;
+    ui.notes.saveExcerptNote.mockImplementationOnce(() => new Promise((_done, reject) => { fail = reject; }));
+    ui.host.querySelector("textarea")!.value = "important draft"; ui.button("保存笔记").click();
+    if (action === "cancel") ui.button("取消").click();
+    else if (action === "escape") ui.escape();
+    else if (action === "close-reader") ui.button("关闭阅读器").click();
+    else await ui.reader.open("docs/other.md");
+    expect(ui.host.querySelector("textarea")?.value).toBe("important draft");
+    fail(new Error("disk full")); await flush();
+    expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+    expect(ui.host.querySelector("textarea")?.value).toBe("important draft");
+    expect(ui.button("取消").disabled).toBe(false);
+    ui.button("保存笔记").click(); await flush();
+    expect(ui.notes.saveExcerptNote).toHaveBeenCalledTimes(2);
+    expect(ui.host.querySelector(".deer-selection-note")).toBeNull();
+  });
+  it("announces a pending save, traps focus with disabled controls and closes on success", async () => {
     const ui = setup(); await ui.reader.open("docs/source.md");
     ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
     let finish!: (value: typeof ui.file) => void;
     ui.notes.saveExcerptNote.mockImplementationOnce(() => new Promise(done => { finish = done; }));
-    ui.host.querySelector("textarea")!.value = "old draft"; ui.button("保存笔记").click();
-    expect(document.activeElement).toBe(ui.button("取消"));
-    ui.escape(); ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
-    ui.host.querySelector("textarea")!.value = "new draft";
+    ui.host.querySelector("textarea")!.value = "draft"; ui.button("保存笔记").click();
+    const editor = ui.host.querySelector<HTMLElement>(".deer-selection-note")!;
+    expect(ui.button("取消").disabled).toBe(true);
+    expect(editor.getAttribute("aria-busy")).toBe("true");
+    expect(ui.host.querySelector('[role="status"]')?.textContent).toContain("正在保存");
+    expect(document.activeElement).toBe(editor);
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    editor.dispatchEvent(tab); expect(tab.defaultPrevented).toBe(true);
     finish(ui.file); await flush();
-    expect(ui.host.querySelector("textarea")!.value).toBe("new draft");
+    expect(ui.host.querySelector(".deer-selection-note")).toBeNull();
+    expect(document.activeElement).toBe(ui.host.querySelector(".deer-reader-content"));
+  });
+  it("still releases the reader when disposed during a pending save", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    let finish!: (value: typeof ui.file) => void;
+    ui.notes.saveExcerptNote.mockImplementationOnce(() => new Promise(done => { finish = done; }));
+    ui.button("保存笔记").click(); ui.reader.dispose();
+    finish(ui.file); await flush();
+    expect(ui.host.querySelector(".deer-reader")).toBeNull();
   });
   it("removes selection and detached action listeners when disposed", async () => {
     const ui = setup(); await ui.reader.open("docs/source.md");

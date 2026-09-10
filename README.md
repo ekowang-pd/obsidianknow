@@ -10,6 +10,12 @@
 - 按来源与日期归并摘录，同时保留原始文件不变。
 - 展示最近 13 周的笔记修改活动。
 
+## 预览验收
+
+当前预览标签为 `0.1.0-preview.1`，插件内部版本为 `0.1.0`。预览版面向桌面端验收，不代表正式发布或移动端验收完成。
+
+安装与验收步骤见 [预览验收清单](docs/preview-acceptance.md)。摘录保存期间显示“正在保存”，暂时禁用取消，并阻止 Escape、关闭阅读器和切换文档丢弃当前编辑器；保存失败后保留原文和草稿，可重试。
+
 ## 安装发布产物
 
 1. 从对应版本的 GitHub Release 下载且仅下载 `main.js`、`manifest.json` 和 `styles.css`。
@@ -66,7 +72,9 @@ npm run dev
 1. 同步 `package.json`、`manifest.json` 和 `versions.json` 中的版本与最低 Obsidian 版本。
 2. 执行完整本地开发验证和 `npm run release:check`。
 3. 在一次性测试 Vault 安装三项发布产物并完成桌面端手工验收。
-4. 创建与 `package.json` 版本完全一致的语义化 Git 标签（例如 `0.1.0`）。
+4. 正式发布创建与 `package.json` 版本一致的 Git 标签（例如 `0.1.0`）；预览版添加后缀（例如 `0.1.0-preview.1`），插件元数据仍保持数字版本 `0.1.0`。
 5. 标签工作流会重新执行安装、单线程测试、类型检查、构建和版本校验，然后创建 GitHub Release 并仅上传三项发布产物。
 
 发布工作流不会发布 npm 包、创建远程仓库或提交 Obsidian Community Plugins PR。
+
+带后缀的标签将发布为 GitHub Pre-release，不设为 Latest。
