@@ -1,0 +1,83 @@
+.deer-dashboard {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  color: var(--text-normal);
+  background: var(--background-primary);
+  font-family: var(--font-interface);
+  line-height: 1.5;
+  overflow: auto;
+  container-type: inline-size;
+}
+
+.deer-sidebar {
+  padding: 28px 22px;
+  background: var(--background-secondary);
+  border-right: 1px solid var(--background-modifier-border);
+}
+
+.deer-brand { display: flex; align-items: center; gap: 10px; }
+.deer-brand h1 { margin: 0; font-size: var(--font-ui-large); }
+.deer-brand > .deer-icon { color: var(--interactive-accent); }
+.deer-icon { display: inline-flex; flex: 0 0 auto; width: 18px; height: 18px; }
+.deer-icon svg { width: 100%; height: 100%; }
+.deer-muted, .deer-note-path, .deer-heat-legend { color: var(--text-muted); font-size: var(--font-ui-small); }
+.deer-statistics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 28px 0 20px; }
+.deer-statistic dt { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.deer-statistic dd { margin: 6px 0 0; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.deer-heatmap { display: grid; grid-template-rows: repeat(7, 1fr); grid-auto-flow: column; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 4px; }
+.deer-heat-cell { aspect-ratio: 1; border-radius: 3px; background: var(--background-modifier-border); }
+.deer-heat-cell[data-level="1"] { background: color-mix(in srgb, var(--interactive-accent) 30%, var(--background-secondary)); }
+.deer-heat-cell[data-level="2"] { background: color-mix(in srgb, var(--interactive-accent) 55%, var(--background-secondary)); }
+.deer-heat-cell[data-level="3"] { background: color-mix(in srgb, var(--interactive-accent) 78%, var(--background-secondary)); }
+.deer-heat-cell[data-level="4"] { background: var(--interactive-accent); }
+.deer-heat-legend { margin: 8px 0 26px; }
+.deer-navigation { display: flex; flex-direction: column; gap: 6px; }
+.deer-dashboard .deer-button { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 38px; height: auto; padding: 8px 12px; box-shadow: none; white-space: normal; text-align: left; }
+.deer-navigation .deer-button { width: 100%; background: transparent; color: var(--text-muted); }
+.deer-navigation .deer-button[aria-current="page"] { color: var(--text-accent); background: var(--background-modifier-hover); font-weight: 600; }
+.deer-navigation button:last-child { margin-top: 20px; }
+.deer-main { min-width: 0; width: 100%; max-width: 1080px; padding: 32px clamp(20px, 4vw, 56px); }
+.deer-composer { border: 1px solid var(--background-modifier-border); border-radius: 14px; padding: 16px; background: var(--background-primary); }
+.deer-composer-label { display: block; font-size: var(--font-ui-small); color: var(--text-muted); }
+.deer-dashboard textarea.deer-quick-input { display: block; width: 100%; min-height: 78px; margin-top: 8px; padding: 4px 0; border: 0; border-radius: 0; resize: vertical; background: transparent; color: var(--text-normal); font: inherit; line-height: 1.6; box-shadow: none; }
+.deer-dashboard textarea.deer-quick-input:focus, .deer-dashboard textarea.deer-quick-input:focus-visible { outline: none; border: 0; box-shadow: none; }
+.deer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.deer-dashboard .deer-icon-button { display: inline-flex; justify-content: center; align-items: center; width: 34px; height: 34px; padding: 8px; background: transparent; color: var(--text-muted); box-shadow: none; }
+.deer-dashboard .deer-icon-button[aria-pressed="true"] { color: var(--text-accent); background: var(--background-modifier-hover); }
+.deer-dashboard .deer-save { display: flex; align-items: center; gap: 6px; margin-left: auto; min-height: 34px; }
+.deer-dashboard button { cursor: pointer; }
+.deer-dashboard button:hover { background: var(--background-modifier-hover); }
+.deer-dashboard button.mod-cta:hover { background: var(--interactive-accent-hover); }
+.deer-dashboard button:focus-visible, .deer-dashboard input:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
+.deer-dashboard button:disabled { opacity: 0.5; cursor: default; }
+.deer-search-label { display: block; margin: 28px 0 20px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.deer-dashboard input.deer-search { display: block; width: 100%; height: 40px; margin-top: 6px; }
+.deer-results h2 { margin: 0 0 6px; font-size: 20px; }
+.deer-note-list { list-style: none; margin: 16px 0 0; padding: 0; }
+.deer-note-row { padding: 18px 0; border-top: 1px solid var(--background-modifier-border); }
+.deer-note-row > .deer-button { padding: 0; min-height: 30px; background: transparent; font-size: var(--font-ui-medium); font-weight: 600; }
+.deer-note-row p { margin: 6px 0 0; }
+.deer-note-path, .deer-note-row, .deer-preview, .deer-error, .deer-button span { overflow-wrap: anywhere; min-width: 0; }
+.deer-tags { color: var(--text-accent); font-size: var(--font-ui-small); }
+.deer-empty { margin-top: 24px; padding: 32px 20px; background: var(--background-secondary); color: var(--text-muted); border-radius: 12px; text-align: center; }
+.deer-preview { min-height: 90px; max-height: 360px; overflow: auto; }
+.deer-preview img { max-width: 100%; }
+.deer-error { margin: 10px 0 0; color: var(--text-error); font-size: var(--font-ui-small); }
+.deer-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.deer-overview-card { padding: 20px; border: 1px solid var(--background-modifier-border); border-radius: 12px; }
+.deer-overview-card dt { color: var(--text-muted); }
+.deer-overview-card dd { margin: 8px 0 0; font-size: 28px; font-variant-numeric: tabular-nums; }
+.deer-dashboard [hidden] { display: none !important; }
+
+@container (max-width: 700px) {
+  .deer-sidebar { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); padding: 20px; }
+  .deer-main { grid-column: 1 / -1; padding: 24px 20px; }
+  .deer-heatmap { max-width: 280px; }
+  .deer-statistics { max-width: 320px; margin-top: 16px; }
+  .deer-navigation { flex-direction: row; flex-wrap: wrap; }
+  .deer-navigation .deer-button { width: auto; }
+  .deer-navigation button:last-child { margin-top: 0; }
+  .deer-overview { grid-template-columns: 1fr; }
+}
