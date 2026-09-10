@@ -196,3 +196,51 @@ Successful output:
 ```
 
 The default-worker form of the focused Vitest command intermittently remained at `RUN` without returning test output in this worktree. The single-worker invocation above completed successfully and is the same project-local workaround recorded for earlier task tests.
+
+## Review fix round 2
+
+### RED
+
+Added a scoped locale-sensitive `String.prototype.toLocaleLowerCase` stub and supplied `#IDEA #idea #Idea`. A controlled mutation of tag deduplication back to `toLocaleLowerCase()` produced the expected regression failure:
+
+```text
+× deer note Markdown > deduplicates differently cased ASCII tags independently of the runtime locale
+→ expected [ 'IDEA', 'idea' ] to deeply equal [ 'IDEA' ]
+
+Test Files  1 failed (1)
+Tests  1 failed | 11 passed (12)
+```
+
+The stub is restored in `finally`; it does not change the process locale.
+
+### GREEN
+
+The production `toLowerCase()` implementation was restored unchanged.
+
+Command:
+
+```text
+npm test -- tests/notes.test.ts tests/contributions.test.ts --pool=threads --poolOptions.threads.singleThread=true
+```
+
+Successful output:
+
+```text
+✓ tests/notes.test.ts (12 tests)
+✓ tests/contributions.test.ts (3 tests)
+Test Files  2 passed (2)
+Tests  15 passed (15)
+```
+
+Command:
+
+```text
+npm run typecheck
+```
+
+Successful output:
+
+```text
+> deer-notes@0.1.0 typecheck
+> tsc --noEmit
+```

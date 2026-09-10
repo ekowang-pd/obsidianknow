@@ -179,4 +179,24 @@ tags: ["思考"]
 
     expect(parseDeerNote(content)?.tags).toEqual(["思考", "标签2"]);
   });
+
+  it("deduplicates differently cased ASCII tags independently of the runtime locale", () => {
+    const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockImplementation(
+      function localeSensitiveLowerCase(this: string): string {
+        return this.replace(/I/g, "ı").toLowerCase();
+      }
+    );
+
+    try {
+      const content = createNoteMarkdown({
+        title: "标签大小写",
+        body: "#IDEA #idea #Idea",
+        date: createdAt
+      });
+
+      expect(parseDeerNote(content)?.tags).toEqual(["IDEA"]);
+    } finally {
+      localeLowerCase.mockRestore();
+    }
+  });
 });
