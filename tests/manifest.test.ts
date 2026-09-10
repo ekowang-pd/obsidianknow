@@ -10,6 +10,20 @@ function readJson(path: string): Record<string, unknown> {
 }
 
 describe("release contract", () => {
+  it("locks platform binaries for clean installs on every supported build host", () => {
+    const lock = readJson("package-lock.json") as {
+      packages: Record<string, { version?: string; optionalDependencies?: Record<string, string> }>;
+    };
+    for (const [path, dependency] of Object.entries(lock.packages)) {
+      if (!path.endsWith("/rollup") && !path.endsWith("/esbuild")) continue;
+      const prefix = path.slice(0, path.lastIndexOf("node_modules/") + "node_modules/".length);
+      for (const [name, version] of Object.entries(dependency.optionalDependencies ?? {})) {
+        if (!name.startsWith("@rollup/") && !name.startsWith("@esbuild/")) continue;
+        const binary = lock.packages[`${prefix}${name}`] ?? lock.packages[`node_modules/${name}`];
+        expect(binary?.version, `${path} requires ${name} on other build hosts`).toBe(version);
+      }
+    }
+  });
   it("keeps release metadata and verification scripts aligned", () => {
     const manifest = readJson("manifest.json");
     const versions = readJson("versions.json");
