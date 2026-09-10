@@ -1,0 +1,19 @@
+{
+  "name": "deer-notes",
+  "version": "0.1.0",
+  "description": "Deer Notes for Obsidian",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/codemirror": "5.60.8",
+    "esbuild": "^0.24.2",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}
