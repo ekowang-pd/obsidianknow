@@ -7,7 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
     "test": "vitest run",
-    "test:single-thread": "vitest run --poolOptions.threads.singleThread=true",
+    "test:single-thread": "vitest run --pool=threads --poolOptions.threads.singleThread=true",
     "typecheck": "tsc --noEmit",
     "release:check": "node scripts/release-check.mjs"
   },

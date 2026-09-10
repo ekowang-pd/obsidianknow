@@ -56,3 +56,19 @@ When a disposable test Vault is available:
 6. Create, rename, and delete root folders; confirm navigation refreshes without plugin restart.
 7. Read a Markdown file, save a selected-text excerpt, and confirm the new note includes excerpt, personal body, and source while the source file remains unchanged.
 8. Check readability in light and dark themes and use Escape to close reader and excerpt editor.
+
+## Verification Correction: Threads Pool Single-Thread Mode
+
+The initial `test:single-thread` script supplied `poolOptions.threads.singleThread=true` but did not select Vitest's `threads` pool. Vitest therefore used its default `forks` pool, where the threads option did not make the release test run single-threaded.
+
+1. Added regression assertions that `test:single-thread` contains both `--pool=threads` and `--poolOptions.threads.singleThread=true`.
+2. RED: `npm test -- tests/manifest.test.ts` failed with expected evidence: the script `vitest run --poolOptions.threads.singleThread=true` did not contain `--pool=threads`.
+3. GREEN: changed the script to `vitest run --pool=threads --poolOptions.threads.singleThread=true`; the focused release-contract test passed.
+4. Corrected verification results:
+
+| Check | Result |
+| --- | --- |
+| `npm run test:single-thread` | Passed with the displayed command `vitest run --pool=threads --poolOptions.threads.singleThread=true`: 13 test files and 93 tests in 12.87 s. |
+| `npm run typecheck` | Passed (`tsc --noEmit`, exit 0). |
+| `npm run build` | Passed (`node esbuild.config.mjs production`, exit 0). |
+| `npm run release:check` | Passed: `deer-notes 0.1.0` and exactly `main.js`, `manifest.json`, `styles.css`. |

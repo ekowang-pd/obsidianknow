@@ -31,5 +31,7 @@ describe("release contract", () => {
       typecheck: expect.any(String),
       "release:check": expect.any(String)
     });
+    expect(scripts["test:single-thread"]).toContain("--pool=threads");
+    expect(scripts["test:single-thread"]).toContain("--poolOptions.threads.singleThread=true");
   });
 });
