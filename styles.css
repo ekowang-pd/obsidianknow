@@ -1,4 +1,5 @@
 .deer-dashboard {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
   gap: 0;
@@ -71,7 +72,31 @@
 .deer-overview-card dd { margin: 8px 0 0; font-size: 28px; font-variant-numeric: tabular-nums; }
 .deer-dashboard [hidden] { display: none !important; }
 
+.deer-dashboard.deer-reader-open { display: block; overflow: hidden; }
+.deer-reader { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 1; background: var(--background-primary); color: var(--text-normal); }
+.deer-reader-header { display: flex; align-items: center; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--background-modifier-border); background: var(--background-secondary); }
+.deer-reader-header button { flex-shrink: 0; }
+.deer-reader-title { min-width: 0; flex: 1; }
+.deer-reader-title h2 { margin: 0; font-size: var(--font-ui-large); }
+.deer-reader-title p { margin: 4px 0 0; overflow-wrap: anywhere; }
+.deer-reader-content { flex: 1; min-height: 0; overflow: auto; padding: 32px max(24px, calc((100% - 800px) / 2)); font-family: var(--font-text); user-select: text; }
+.deer-reader-content img { max-width: 100%; }
+.deer-reader-content pre { overflow-x: auto; }
+.deer-selection-menu { position: absolute; z-index: 3; padding: 4px; border: 1px solid var(--background-modifier-border); border-radius: 8px; background: var(--background-primary); box-shadow: var(--shadow-s); }
+.deer-selection-menu button { min-height: 32px; }
+.deer-selection-note { position: absolute; z-index: 4; inset: auto 24px 24px; max-height: calc(100% - 48px); width: min(680px, calc(100% - 48px)); margin-inline: auto; padding: 24px; overflow: auto; border: 1px solid var(--background-modifier-border); border-radius: 12px; background: var(--background-primary); box-shadow: var(--shadow-l); }
+.deer-excerpt { margin: 0 0 20px; max-height: 180px; padding: 12px 16px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; border-left: 3px solid var(--interactive-accent); color: var(--text-muted); background: var(--background-secondary); }
+.deer-selection-note label { display: block; }
+.deer-dashboard textarea.deer-excerpt-input { width: 100%; min-height: 120px; margin-top: 8px; resize: vertical; font-family: var(--font-text); }
+.deer-excerpt-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.deer-reader > .deer-error { padding: 12px 24px; }
+
 @container (max-width: 700px) {
+  .deer-reader-header { gap: 10px; flex-wrap: wrap; padding: 12px; }
+  .deer-reader-title { flex-basis: calc(100% - 130px); }
+  .deer-reader-header > button:last-child { margin-left: auto; }
+  .deer-reader-content { padding: 20px 16px; }
+  .deer-selection-note { inset: auto 12px 12px; width: calc(100% - 24px); max-height: calc(100% - 24px); padding: 16px; }
   .deer-sidebar { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); padding: 20px; }
   .deer-main { grid-column: 1 / -1; padding: 24px 20px; }
   .deer-heatmap { max-width: 280px; }

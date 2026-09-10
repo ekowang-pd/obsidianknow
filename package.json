@@ -9,9 +9,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
     "@types/codemirror": "5.60.8",
+    "@types/node": "^22.10.5",
     "esbuild": "^0.24.2",
+    "jsdom": "^30.0.1",
     "obsidian": "^1.7.2",
     "typescript": "^5.7.2",
     "vitest": "^3.2.4"

@@ -1,0 +1,154 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { Component, MarkdownRenderer } from "obsidian";
+import { ReaderController } from "../src/views/reader";
+
+const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+const controllers: ReaderController[] = [];
+afterEach(() => { controllers.splice(0).forEach(reader => reader.dispose()); document.body.replaceChildren(); vi.restoreAllMocks(); });
+
+function setup() {
+  const host = document.createElement("div");
+  const trigger = document.createElement("button");
+  host.append(trigger); document.body.append(host); trigger.focus();
+  const file = { path: "docs/source.md", basename: "source", extension: "md" };
+  const openFile = vi.fn(async (_file: unknown) => {});
+  const app = {
+    vault: { getAbstractFileByPath: vi.fn(() => file), cachedRead: vi.fn(async () => "first\n\nsecond") },
+    workspace: { getLeaf: vi.fn(() => ({ openFile })), openLinkText: vi.fn(async () => {}) }
+  };
+  const notes = { saveExcerptNote: vi.fn(async (_input: unknown) => file) };
+  const reader = new ReaderController(app as never, host, () => notes as never);
+  controllers.push(reader);
+  const button = (label: string) => [...host.querySelectorAll("button")].find(el => el.textContent === label)!;
+  const select = () => {
+    const content = host.querySelector<HTMLElement>(".deer-reader-content")!;
+    const range = document.createRange(); range.selectNodeContents(content);
+    range.getBoundingClientRect = () => ({ left: 9999, bottom: 9999 } as DOMRect);
+    const selection = document.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+    return content;
+  };
+  const escape = () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+  return { reader, host, app, notes, file, button, trigger, select, escape, openFile };
+}
+
+describe("ReaderController", () => {
+  it("reads the live file, renders Markdown with its source path and opens Obsidian only explicitly", async () => {
+    const ui = setup(); const render = vi.spyOn(MarkdownRenderer, "render");
+    await ui.reader.open("docs/source.md");
+    expect(ui.app.vault.getAbstractFileByPath).toHaveBeenCalledWith("docs/source.md");
+    expect(ui.app.vault.cachedRead).toHaveBeenCalledWith(ui.file);
+    expect(render.mock.calls[0][3]).toBe("docs/source.md");
+    expect(ui.host.querySelector(".deer-reader-content")?.textContent).toBe("first\n\nsecond");
+    expect(ui.openFile).not.toHaveBeenCalled();
+    ui.button("在 Obsidian 中打开").click(); await flush();
+    expect(ui.openFile).toHaveBeenCalledWith(ui.file);
+    ui.button("关闭阅读器").click();
+    expect(ui.host.querySelector(".deer-reader")).toBeNull();
+    expect(document.activeElement).toBe(ui.trigger);
+  });
+  it.each(["close", "dispose"] as const)("ignores a pending read after %s", async action => {
+    const ui = setup(); let resolve!: (value: string) => void;
+    ui.app.vault.cachedRead.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    const render = vi.spyOn(MarkdownRenderer, "render");
+    const pending = ui.reader.open("docs/source.md"); ui.reader[action](); resolve("late"); await pending;
+    expect(render).not.toHaveBeenCalled(); expect(ui.host.querySelector(".deer-reader")).toBeNull();
+    if (action === "dispose") { await ui.reader.open("docs/source.md"); expect(ui.host.querySelector(".deer-reader")).toBeNull(); }
+  });
+  it("lets the latest open win and unloads a stale renderer component", async () => {
+    const ui = setup(); let finish!: () => void;
+    const unload = vi.spyOn(Component.prototype, "unload");
+    vi.spyOn(MarkdownRenderer, "render").mockImplementationOnce(async (_app, _md, target) => {
+      await new Promise<void>(done => { finish = done; }); target.textContent = "stale";
+    });
+    const first = ui.reader.open("docs/old.md"); await flush();
+    await ui.reader.open("docs/source.md"); finish(); await first;
+    expect(ui.host.querySelector(".deer-reader-content")?.textContent).toBe("first\n\nsecond");
+    expect(unload).toHaveBeenCalled();
+  });
+  it("surfaces missing/read failures without rendering a stale document", async () => {
+    const ui = setup(); ui.app.vault.getAbstractFileByPath.mockReturnValueOnce(null as never);
+    await ui.reader.open("missing.md");
+    expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("missing.md");
+    ui.app.vault.cachedRead.mockRejectedValueOnce(new Error("read failed"));
+    await ui.reader.open("docs/source.md");
+    expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("read failed");
+  });
+  it("shows one clamped action for pointer/keyboard selection and prevents only selected reader contextmenu", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md"); const content = ui.select();
+    content.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    document.dispatchEvent(new Event("selectionchange"));
+    const menu = ui.host.querySelector<HTMLElement>(".deer-selection-menu")!;
+    expect(menu.querySelectorAll("button")).toHaveLength(1); expect(menu.textContent).toBe("做笔记");
+    expect(parseFloat(menu.style.left)).toBeLessThan(window.innerWidth);
+    expect(parseFloat(menu.style.top)).toBeLessThan(window.innerHeight);
+    const inside = new MouseEvent("contextmenu", { bubbles: true, cancelable: true }); content.dispatchEvent(inside);
+    expect(inside.defaultPrevented).toBe(true);
+    const outside = new MouseEvent("contextmenu", { bubbles: true, cancelable: true }); document.body.dispatchEvent(outside);
+    expect(outside.defaultPrevented).toBe(false);
+    document.getSelection()!.removeAllRanges();
+    const empty = new MouseEvent("contextmenu", { bubbles: true, cancelable: true }); content.dispatchEvent(empty);
+    expect(empty.defaultPrevented).toBe(false);
+  });
+  it("retains the captured excerpt through action pointerdown, and Escape closes menu then editor then reader", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true }));
+    ui.escape(); expect(ui.host.querySelector(".deer-selection-menu")).toBeNull(); expect(ui.host.querySelector(".deer-reader")).not.toBeNull();
+    ui.select().dispatchEvent(new KeyboardEvent("keyup", { key: "Shift", bubbles: true }));
+    const action = ui.button("做笔记");
+    const down = new Event("pointerdown", { bubbles: true, cancelable: true }); action.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(true); action.click();
+    expect(ui.host.querySelector(".deer-excerpt")?.textContent).toBe("first\n\nsecond");
+    expect(document.activeElement?.tagName).toBe("TEXTAREA");
+    ui.escape(); expect(ui.host.querySelector(".deer-selection-note")).toBeNull();
+    expect(document.activeElement).toBe(ui.host.querySelector(".deer-reader-content"));
+    ui.escape(); expect(ui.host.querySelector(".deer-reader")).toBeNull(); expect(document.activeElement).toBe(ui.trigger);
+  });
+  it("saves exact excerpt/body/source and retains failed drafts for retry", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    const textarea = ui.host.querySelector("textarea")!; textarea.value = " **my note**\n\nthought ";
+    ui.notes.saveExcerptNote.mockRejectedValueOnce(new Error("disk full"));
+    ui.button("保存笔记").click(); await flush();
+    expect(textarea.value).toBe(" **my note**\n\nthought ");
+    expect(ui.host.querySelector(".deer-excerpt")?.textContent).toBe("first\n\nsecond");
+    expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("disk full");
+    expect(ui.notes.saveExcerptNote).toHaveBeenCalledWith({ source: "docs/source.md", excerpt: "first\n\nsecond", body: " **my note**\n\nthought ", date: expect.any(Date) });
+    ui.button("保存笔记").click(); await flush(); expect(ui.host.querySelector(".deer-selection-note")).toBeNull();
+  });
+  it("routes rendered internal links through Workspace with the current source path", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    const link = document.createElement("a"); link.className = "internal-link"; link.dataset.href = "other#section";
+    ui.host.querySelector(".deer-reader-content")!.append(link);
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, ctrlKey: true })); await flush();
+    expect(ui.app.workspace.openLinkText).toHaveBeenCalledWith("other#section", "docs/source.md", true);
+  });
+  it("starts the full-view reader at the top and restores the dashboard scroll on close", async () => {
+    const ui = setup(); ui.host.scrollTop = 240; ui.host.scrollLeft = 12;
+    await ui.reader.open("docs/source.md");
+    expect(ui.host.scrollTop).toBe(0); expect(ui.host.scrollLeft).toBe(0);
+    ui.reader.close(); expect(ui.host.scrollTop).toBe(240); expect(ui.host.scrollLeft).toBe(12);
+  });
+  it("keeps a newer editor untouched when a previous save completes", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    let finish!: (value: typeof ui.file) => void;
+    ui.notes.saveExcerptNote.mockImplementationOnce(() => new Promise(done => { finish = done; }));
+    ui.host.querySelector("textarea")!.value = "old draft"; ui.button("保存笔记").click();
+    expect(document.activeElement).toBe(ui.button("取消"));
+    ui.escape(); ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    ui.host.querySelector("textarea")!.value = "new draft";
+    finish(ui.file); await flush();
+    expect(ui.host.querySelector("textarea")!.value).toBe("new draft");
+  });
+  it("removes selection and detached action listeners when disposed", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    const content = ui.select(); content.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    const action = ui.button("做笔记"); const removed = vi.spyOn(document, "removeEventListener");
+    ui.reader.dispose(); document.dispatchEvent(new Event("selectionchange")); action.click();
+    expect(removed).toHaveBeenCalledWith("selectionchange", expect.any(Function));
+    expect(ui.host.querySelector(".deer-reader")).toBeNull(); expect(ui.notes.saveExcerptNote).not.toHaveBeenCalled();
+    const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true }); content.dispatchEvent(menu);
+    expect(menu.defaultPrevented).toBe(false);
+  });
+});

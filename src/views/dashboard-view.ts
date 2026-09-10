@@ -7,6 +7,7 @@ import type { VaultIndex, VaultSnapshot } from "../services/vault-index";
 import type { DeerNotesSettings } from "../settings";
 import { DashboardState } from "./dashboard-state";
 import type { ReadBody } from "./dashboard-state";
+import { ReaderController } from "./reader";
 
 export const VIEW_TYPE_DEER_NOTES = "deer-notes-dashboard";
 export type OpenDashboardFile = (filePath: string) => void | Promise<void>;
@@ -30,6 +31,7 @@ export class DeerNotesView extends ItemView {
   private previewRevision = 0;
   private searchRevision = 0;
   private previewComponent: Component | null = null;
+  private reader: ReaderController | null = null;
   private sidebar!: HTMLElement;
   private results!: HTMLElement;
   private textarea!: HTMLTextAreaElement;
@@ -86,6 +88,8 @@ export class DeerNotesView extends ItemView {
 
   async onClose(): Promise<void> {
     this.closed = true;
+    this.reader?.dispose();
+    this.reader = null;
     this.searchRevision += 1;
     this.state.cancelSearch();
     this.previewRevision += 1;
@@ -95,6 +99,12 @@ export class DeerNotesView extends ItemView {
     this.clearPreview();
     this.composerButtons = [];
     this.contentEl.replaceChildren();
+  }
+
+  async openReader(filePath: string): Promise<void> {
+    if (this.closed) return;
+    this.reader ??= new ReaderController(this.app, this.contentEl, () => this.notes);
+    await this.reader.open(filePath);
   }
 
   updateSettings(settings: DeerNotesSettings, index = this.index, notes = this.notes): void {

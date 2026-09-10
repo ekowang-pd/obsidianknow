@@ -37,11 +37,14 @@ export default class DeerNotesPlugin extends Plugin {
     this.ready = new Promise<void>(resolve => this.app.workspace.onLayoutReady(resolve))
       .then(async () => { if (!this.disposed && this.index === initialIndex) await initialIndex.initialize(); });
     void this.ready.catch(error => this.showError(error));
-    this.registerView(VIEW_TYPE_DEER_NOTES, leaf => new DeerNotesView(
-      leaf, this.index!, this.notes!, this.settings,
-      path => this.openDashboardFile(path),
-      path => this.readBody(path)
-    ));
+    this.registerView(VIEW_TYPE_DEER_NOTES, leaf => {
+      const view: DeerNotesView = new DeerNotesView(
+        leaf, this.index!, this.notes!, this.settings,
+        path => this.openDashboardFile(path, view),
+        path => this.readBody(path)
+      );
+      return view;
+    });
     const activate = () => { void this.activateView().catch(error => this.showError(error)); };
     this.addRibbonIcon("notebook-pen", "打开小鹿笔记", activate);
     this.addCommand({ id: "open-dashboard", name: "打开小鹿笔记", callback: activate });
@@ -84,9 +87,14 @@ export default class DeerNotesPlugin extends Plugin {
     await this.app.workspace.revealLeaf(leaf);
   }
 
-  // Task 6 can replace this path-based integration point with the split reader.
-  async openDashboardFile(path: string): Promise<void> {
-    await this.app.workspace.openLinkText(path, "", "tab");
+  async openDashboardFile(path: string, view?: DeerNotesView): Promise<void> {
+    if (this.disposed) return;
+    if (!view) {
+      await this.activateView();
+      view = this.app.workspace.getLeavesOfType(VIEW_TYPE_DEER_NOTES)
+        .map(leaf => leaf.view).find(candidate => candidate instanceof DeerNotesView) as DeerNotesView | undefined;
+    }
+    await view?.openReader(path);
   }
 
   private async readBody(path: string): Promise<string> {
