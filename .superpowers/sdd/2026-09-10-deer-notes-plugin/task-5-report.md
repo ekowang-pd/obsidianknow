@@ -140,3 +140,75 @@ Initial typecheck caught a helper name colliding with ItemView's `icon: string` 
 ## Commit
 
 `feat: build dashboard and quick notes`
+
+## Review fix round 1
+
+### Verified causes
+
+- `onClose` invalidated the view's render revision but left the independent `DashboardState` search revision active. After the first pending body read settled, the state continued reading additional candidates.
+- `updateSettings` swapped the service and preview source folder for an existing draft. Its relative attachment links still referred to the original attachment directory, so the new save/preview base broke them. A settings update during an initially empty draft's upload had the same problem.
+- Sidebar rebuilding removed the focused navigation button without restoring focus.
+
+### RED evidence
+
+```text
+npm test -- tests/dashboard-state.test.ts tests/dashboard-view.test.ts --pool=threads --poolOptions.threads.singleThread=true
+× DashboardState > cancels pending body search without starting another read or applying its result
+  state.cancelSearch is not a function
+× DeerNotesView > does not start more body reads after closing a view with an in-flight search
+  expected reader to be called 1 times, but got 2 times
+× DeerNotesView > keeps image draft save and preview in their original folder when settings change (pending upload: false)
+  expected '新笔记/未保存.md' to be '小鹿笔记/未保存.md'
+× DeerNotesView > keeps image draft save and preview in their original folder when settings change (pending upload: true)
+  expected '新笔记/未保存.md' to be '小鹿笔记/未保存.md'
+× DeerNotesView > restores selected navigation focus after navigation and snapshot rebuilds without stealing input focus
+  expected null to be the replacement navigation button
+Test Files 2 failed (2)
+Tests 5 failed | 16 passed (21)
+```
+
+### Fix and self-review
+
+- Added `DashboardState.cancelSearch()` and invoked it from `onClose`. It invalidates the pending search's revision, stopping subsequent reads and preventing stale body matches from being committed. The in-flight Vault read itself cannot be aborted by the existing adapter; no further read starts after it settles.
+- Added a draft context that captures its `NoteService` and note directory on the first nonempty input or upload start, before asynchronous work. Save, later uploads, and preview use that captured context until successful save or manual clearing; current view/index settings still update immediately. Failed saves retain the context for retry. An empty draft adopts the current settings immediately.
+- Each upload continuation retains the captured context and records its completed absolute Vault attachment path in that context. Relative Markdown remains unchanged and no file is moved, rewritten, or deleted by a settings change.
+- Added coverage for settings updates both before and after an upload resolves, original-folder preview, failed-save retry, successful clearing and subsequent new-folder save, and adoption after manual clearing.
+- Sidebar rendering now detects whether its old navigation contained focus and restores it to the newly selected entry, including fallback after a folder disappears. A separate assertion verifies snapshot refresh does not steal focus from the textarea.
+- The Node DOM boundary now models a shared `ownerDocument.activeElement`, clearing focus when focused descendants are removed. Tests restore MarkdownRenderer spies after each case.
+- No descriptor interface or service implementation changed; no dependency was added.
+
+### GREEN evidence
+
+Focused verification:
+
+```text
+npm test -- tests/dashboard-state.test.ts tests/dashboard-view.test.ts tests/main.test.ts --pool=threads --poolOptions.threads.singleThread=true
+✓ tests/dashboard-view.test.ts (11 tests)
+✓ tests/dashboard-state.test.ts (10 tests)
+✓ tests/main.test.ts (7 tests)
+Test Files 3 passed (3)
+Tests 28 passed (28)
+```
+
+Final complete suite:
+
+```text
+npm test -- --pool=threads --poolOptions.threads.singleThread=true
+Test Files 9 passed (9)
+Tests 67 passed (67)
+```
+
+```text
+npm run typecheck
+> tsc --noEmit
+Exit code 0, no diagnostics.
+
+npm run build
+> node esbuild.config.mjs production
+Exit code 0; main.js emitted (50,496 bytes).
+
+git diff --check
+Exit code 0, no whitespace errors.
+```
+
+The live Obsidian visual/native-picker acceptance limit and unused-attachment concern above remain unchanged. Existing drafts intentionally finish in their original configured directory; newly empty drafts use the latest directory.

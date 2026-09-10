@@ -11,6 +11,12 @@ import type { ReadBody } from "./dashboard-state";
 export const VIEW_TYPE_DEER_NOTES = "deer-notes-dashboard";
 export type OpenDashboardFile = (filePath: string) => void | Promise<void>;
 
+interface DraftContext {
+  notes: NoteService;
+  notesFolder: string;
+  attachmentPaths: Set<string>;
+}
+
 export class DeerNotesView extends ItemView {
   private state: DashboardState;
   private snapshot: VaultSnapshot;
@@ -18,6 +24,7 @@ export class DeerNotesView extends ItemView {
   private cleanups: (() => void)[] = [];
   private closed = true;
   private draft = "";
+  private draftContext: DraftContext | null = null;
   private busy = false;
   private preview = false;
   private previewRevision = 0;
@@ -80,6 +87,7 @@ export class DeerNotesView extends ItemView {
   async onClose(): Promise<void> {
     this.closed = true;
     this.searchRevision += 1;
+    this.state.cancelSearch();
     this.previewRevision += 1;
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -101,6 +109,7 @@ export class DeerNotesView extends ItemView {
     this.snapshot = index.getSnapshot();
     this.state.updateSnapshot(this.snapshot);
     if (!this.closed) {
+      this.updateComposer();
       this.renderSidebar();
       void this.refreshSearch();
       if (this.preview) void this.renderPreview();
@@ -120,6 +129,8 @@ export class DeerNotesView extends ItemView {
   }
 
   private renderSidebar(): void {
+    const focused = this.sidebar.ownerDocument.activeElement;
+    const restoreFocus = this.sidebar.contains(focused) && Boolean(focused?.closest("button[data-action]"));
     this.sidebar.replaceChildren();
     const brand = this.element(this.sidebar, "div", "deer-brand");
     this.renderIcon(brand, "notebook-pen");
@@ -149,7 +160,10 @@ export class DeerNotesView extends ItemView {
       const button = this.button(nav, item.label, item.kind === "folder" ? "folder" : item.kind === "notes" ? "notebook" : "chart-no-axes-combined", item.kind);
       if (item.kind === "folder") button.dataset.folder = item.id;
       const selected = this.state.selectedView;
-      if (selected.kind === item.kind && (selected.kind !== "folder" || selected.path === item.id)) button.setAttribute("aria-current", "page");
+      if (selected.kind === item.kind && (selected.kind !== "folder" || selected.path === item.id)) {
+        button.setAttribute("aria-current", "page");
+        if (restoreFocus) button.focus();
+      }
     }
   }
 
@@ -287,8 +301,9 @@ export class DeerNotesView extends ItemView {
     this.showError("");
     this.updateComposer();
     try {
-      await this.notes.saveQuickNote({ body: this.draft, date: new Date() });
+      await this.getDraftContext().notes.saveQuickNote({ body: this.draft, date: new Date() });
       this.draft = "";
+      this.draftContext = null;
       if (!this.closed) {
         this.textarea.value = "";
         this.preview = false;
@@ -306,9 +321,13 @@ export class DeerNotesView extends ItemView {
     this.busy = true;
     this.showError("");
     this.updateComposer();
+    const context = this.getDraftContext();
     try {
-      const path = await this.notes.saveAttachment(file);
-      if (!this.closed) this.replaceSelection(`![图片](<${path.replace(/[<>%\r\n]/g, encodeURIComponent)}>)`);
+      const relativePath = await context.notes.saveAttachment(file);
+      // Keep the completed upload's Vault path tied to the captured draft context.
+      const vaultPath = `${context.notesFolder}/${relativePath}`;
+      context.attachmentPaths.add(vaultPath);
+      if (!this.closed) this.replaceSelection(`![图片](<${relativePath.replace(/[<>%\r\n]/g, encodeURIComponent)}>)`);
     } catch (error) { if (!this.closed) this.showError(`图片保存失败：${errorMessage(error)}`); }
     finally {
       this.busy = false;
@@ -323,7 +342,8 @@ export class DeerNotesView extends ItemView {
     this.previewComponent = component;
     const target = this.contentEl.ownerDocument.createElement("div");
     try {
-      await MarkdownRenderer.render(this.app, this.draft, target, `${this.settings.notesFolder}/未保存.md`, component);
+      const notesFolder = this.draftContext?.notesFolder ?? this.settings.notesFolder;
+      await MarkdownRenderer.render(this.app, this.draft, target, `${notesFolder}/未保存.md`, component);
       if (!this.closed && this.preview && revision === this.previewRevision) this.previewEl.replaceChildren(target);
     } catch (error) {
       if (!this.closed && revision === this.previewRevision) this.showError(`预览失败：${errorMessage(error)}`);
@@ -337,12 +357,21 @@ export class DeerNotesView extends ItemView {
   }
 
   private updateComposer(): void {
+    if (this.draft || this.busy) this.getDraftContext();
+    else this.draftContext = null;
     this.textarea.disabled = this.busy;
     this.textarea.hidden = this.preview;
     this.previewEl.hidden = !this.preview;
     for (const button of this.composerButtons) button.disabled = this.busy;
     this.saveButton.disabled = this.busy || !this.draft.trim();
     this.previewButton.setAttribute("aria-pressed", String(this.preview));
+  }
+
+  private getDraftContext(): DraftContext {
+    if (!this.draftContext) {
+      this.draftContext = { notes: this.notes, notesFolder: this.settings.notesFolder, attachmentPaths: new Set() };
+    }
+    return this.draftContext;
   }
 
   private showError(message: string): void {

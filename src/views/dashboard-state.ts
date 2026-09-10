@@ -50,6 +50,8 @@ export class DashboardState {
     this.reconcile();
   }
 
+  cancelSearch(): void { this.revision += 1; }
+
   async setSearchQuery(query: string): Promise<void> {
     this.searchQuery = query;
     this.bodyMatches.clear();
@@ -83,7 +85,7 @@ export class DashboardState {
 
   private select(selection: DashboardSelection): void {
     this.selectedView = selection;
-    this.revision += 1;
+    this.cancelSearch();
     this.bodyMatches.clear();
   }
 

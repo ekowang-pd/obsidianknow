@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MarkdownRenderer } from "obsidian";
 import { DeerNotesView } from "../src/views/dashboard-view";
 import { DEFAULT_SETTINGS } from "../src/settings";
@@ -7,19 +7,20 @@ import { TestElement } from "./dom.mock";
 
 const empty: VaultSnapshot = { rootFolders: [], markdownFiles: [], deerNotes: [] };
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+afterEach(() => vi.restoreAllMocks());
 
-function setup(snapshot = empty) {
+function setup(snapshot = empty, readBody = async (_path: string) => "body") {
   const unsubscribe = vi.fn();
   let listener: (value: VaultSnapshot) => void = () => {};
   const index = { getSnapshot: () => snapshot, subscribe: (callback: typeof listener) => { listener = callback; return unsubscribe; } };
   const service = { saveQuickNote: vi.fn(async (_input: unknown) => ({ path: "小鹿笔记/草稿.md" })), saveAttachment: vi.fn(async (_file: unknown) => "附件/image.png") };
   const openFile = vi.fn();
-  const view = new DeerNotesView({ app: {} } as never, index as never, service as never, DEFAULT_SETTINGS, openFile, async () => "body");
+  const view = new DeerNotesView({ app: {} } as never, index as never, service as never, DEFAULT_SETTINGS, openFile, readBody);
   const root = view.contentEl as unknown as TestElement;
   const action = (name: string) => root.find(node => node.dataset.action === name)[0];
   const textarea = () => root.find(node => node.tagName === "textarea")[0];
   const draft = (body: string) => { textarea().value = body; textarea().dispatch("input"); };
-  return { view, root, action, textarea, draft, service, openFile, unsubscribe, publish: (value: VaultSnapshot) => listener(value) };
+  return { view, root, action, textarea, draft, service, index, openFile, unsubscribe, publish: (value: VaultSnapshot) => listener(value) };
 }
 
 describe("DeerNotesView", () => {
@@ -99,5 +100,89 @@ describe("DeerNotesView", () => {
     ui.textarea().setSelectionRange(0, 7);
     ui.action(action).click();
     expect(ui.textarea().value).toBe(expected);
+  });
+
+  it("does not start more body reads after closing a view with an in-flight search", async () => {
+    let resolve!: (body: string) => void;
+    const read = vi.fn(() => new Promise<string>(done => { resolve = done; }));
+    const notes = ["a", "b"].map(name => ({ path: `小鹿笔记/${name}.md`, name: `${name}.md`, basename: name, extension: "md", title: name, source: "", tags: [], created: "2026-09-10", updated: "2026-09-10" }));
+    const ui = setup({ ...empty, deerNotes: notes, markdownFiles: notes }, read);
+    await ui.view.onOpen();
+    const search = ui.root.find(node => node.type === "search")[0];
+    search.value = "hidden";
+    search.dispatch("input");
+    await ui.view.onClose();
+    resolve("hidden");
+    await flush();
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(ui.root.children).toEqual([]);
+  });
+
+  it.each([false, true])("keeps image draft save and preview in their original folder when settings change (pending upload: %s)", async pending => {
+    const ui = setup();
+    await ui.view.onOpen();
+    let finishUpload!: (path: string) => void;
+    if (pending) ui.service.saveAttachment.mockImplementationOnce(() => new Promise(resolve => { finishUpload = resolve; }));
+    const imageInput = ui.root.find(node => node.type === "file")[0];
+    imageInput.files = [{ type: "image/png", size: 1, arrayBuffer: async () => new ArrayBuffer(1) }];
+    imageInput.dispatch("change");
+    if (!pending) await flush();
+    const nextService = { saveQuickNote: vi.fn(async () => ({ path: "新笔记/new.md" })), saveAttachment: vi.fn(async () => "新附件/new.png") };
+    ui.view.updateSettings({ ...DEFAULT_SETTINGS, notesFolder: "新笔记", attachmentsFolder: "新附件" }, ui.index as never, nextService as never);
+    if (pending) { finishUpload("附件/image.png"); await flush(); }
+    expect(ui.textarea().value).toBe("![图片](<附件/image.png>)");
+    const render = vi.spyOn(MarkdownRenderer, "render");
+    ui.action("preview").click();
+    await flush();
+    expect(render.mock.calls.at(-1)?.[3]).toBe("小鹿笔记/未保存.md");
+    render.mockRestore();
+    ui.service.saveQuickNote.mockRejectedValueOnce(new Error("请重试"));
+    ui.action("save").click();
+    await flush();
+    expect(ui.textarea().value).toBe("![图片](<附件/image.png>)");
+    ui.action("save").click();
+    await flush();
+    expect(ui.service.saveQuickNote).toHaveBeenCalledTimes(2);
+    expect(nextService.saveQuickNote).not.toHaveBeenCalled();
+    expect(ui.textarea().value).toBe("");
+    ui.draft("next draft");
+    ui.action("save").click();
+    await flush();
+    expect(nextService.saveQuickNote).toHaveBeenCalledWith({ body: "next draft", date: expect.any(Date) });
+  });
+
+  it("adopts new settings immediately for an empty or manually cleared draft", async () => {
+    const ui = setup();
+    await ui.view.onOpen();
+    const nextService = { saveQuickNote: vi.fn(async () => ({ path: "新笔记/new.md" })), saveAttachment: vi.fn(async () => "新附件/new.png") };
+    ui.draft("old draft");
+    ui.draft("");
+    ui.view.updateSettings({ ...DEFAULT_SETTINGS, notesFolder: "新笔记", attachmentsFolder: "新附件" }, ui.index as never, nextService as never);
+    const imageInput = ui.root.find(node => node.type === "file")[0];
+    imageInput.files = [{ type: "image/png", size: 1, arrayBuffer: async () => new ArrayBuffer(1) }];
+    imageInput.dispatch("change");
+    await flush();
+    expect(ui.textarea().value).toBe("![图片](<新附件/new.png>)");
+    expect(ui.service.saveAttachment).not.toHaveBeenCalled();
+    ui.action("save").click();
+    await flush();
+    expect(nextService.saveQuickNote).toHaveBeenCalledOnce();
+  });
+
+  it("restores selected navigation focus after navigation and snapshot rebuilds without stealing input focus", async () => {
+    const ui = setup({ ...empty, rootFolders: [{ path: "01 收件箱", name: "01 收件箱" }] });
+    await ui.view.onOpen();
+    const folder = ui.root.find(node => node.dataset.folder === "01 收件箱")[0];
+    folder.focus();
+    folder.click();
+    await flush();
+    expect(ui.root.ownerDocument.activeElement === ui.root.find(node => node.dataset.folder === "01 收件箱")[0]).toBe(true);
+    ui.publish(empty);
+    await flush();
+    expect(ui.root.ownerDocument.activeElement === ui.action("notes")).toBe(true);
+    ui.textarea().focus();
+    ui.publish(empty);
+    await flush();
+    expect(ui.root.ownerDocument.activeElement === ui.textarea()).toBe(true);
   });
 });

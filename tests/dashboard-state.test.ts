@@ -80,4 +80,19 @@ describe("DashboardState", () => {
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS, async () => { throw new Error("读取失败"); });
     await expect(state.setSearchQuery("hidden")).rejects.toThrow("读取失败");
   });
+
+  it("cancels pending body search without starting another read or applying its result", async () => {
+    let resolve!: (body: string) => void;
+    const read = vi.fn(() => new Promise<string>(done => { resolve = done; }));
+    const state = new DashboardState(snapshot, DEFAULT_SETTINGS, read);
+    state.selectFolder("01 收件箱");
+    const pending = state.setSearchQuery("hidden");
+    state.cancelSearch();
+    resolve("hidden");
+    await pending;
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(state.visibleFiles).toEqual([]);
+    await state.setSearchQuery("");
+    expect(state.visibleFiles.map(file => file.path)).toEqual(["01 收件箱/a.md", "01 收件箱/子目录/b.md"]);
+  });
 });
