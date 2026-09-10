@@ -1,3 +1,4 @@
+import { translate } from "../i18n";
 import { buildRootNavigation } from "../domain/navigation";
 import type { DeerNotesSettings } from "../settings";
 import type { DeerNoteDescriptor, VaultFileDescriptor, VaultSnapshot } from "../services/vault-index";
@@ -8,6 +9,7 @@ export type DashboardFile = VaultFileDescriptor | DeerNoteDescriptor;
 export type ReadBody = (path: string) => Promise<string>;
 
 export class DashboardState {
+  private t = (source: string, ...values: unknown[]) => translate(this.settings.language, source, ...values);
   selectedView: DashboardSelection = { kind: "notes" };
   searchQuery = "";
   private bodyMatches = new Set<string>();
@@ -21,10 +23,10 @@ export class DashboardState {
 
   get navigation(): DashboardNavItem[] {
     return [
-      { id: "all-notes", label: "全部笔记", kind: "notes" },
+      { id: "all-notes", label: this.t("全部笔记"), kind: "notes" },
       ...buildRootNavigation(this.snapshot.rootFolders.map(folder => folder.path), this.settings)
         .map(folder => ({ id: folder.path, label: folder.label, kind: "folder" as const })),
-      { id: "overview", label: "知识概览", kind: "overview" }
+      { id: "overview", label: this.t("知识概览"), kind: "overview" }
     ];
   }
 

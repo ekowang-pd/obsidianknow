@@ -60,6 +60,7 @@ describe("settings", () => {
 
   it("normalizes an empty stored value to the exact defaults", () => {
     expect(normalizeSettings({})).toEqual({
+      language: "zh-CN",
       notesFolder: "小鹿笔记",
       attachmentsFolder: "附件",
       hiddenRootFolders: []
@@ -86,6 +87,7 @@ describe("settings", () => {
       attachmentsFolder: "../附件",
       hiddenRootFolders: [" 收件箱/ ", "收件箱", 1]
     })).toEqual({
+      language: "zh-CN",
       notesFolder: "80 笔记",
       attachmentsFolder: DEFAULT_SETTINGS.attachmentsFolder,
       hiddenRootFolders: ["收件箱"]

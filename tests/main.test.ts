@@ -68,6 +68,7 @@ describe("Deer Notes plugin", () => {
     await underTest.onload();
 
     expect(underTest.settings).toEqual({
+      language: "zh-CN",
       notesFolder: "80 笔记",
       attachmentsFolder: "附件",
       hiddenRootFolders: []
@@ -90,6 +91,7 @@ describe("Deer Notes plugin", () => {
     });
 
     expect(saveData).toHaveBeenCalledWith({
+      language: "zh-CN",
       notesFolder: "小鹿笔记",
       attachmentsFolder: "附件",
       hiddenRootFolders: ["收件箱"]

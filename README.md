@@ -14,9 +14,13 @@ Deer Notes is a local-first dashboard for quick notes, Markdown reading, and exc
 - **Knowledge overview:** Explore document growth over 7, 30, or 90 days, folder distribution, recent updates, and recent articles in each category.
 - **Activity heatmap:** View note modification activity over the past 13 weeks.
 
+## Interface language
+
+In Obsidian, open Settings → Deer Notes and select English under Interface language (界面语言). The selection is saved per vault and updates the open dashboard without discarding drafts.
+
 ## Getting started
 
-Enable Deer Notes, then click its ribbon icon or search the command palette for **打开小鹿笔记** (Open Deer Notes). The interface currently uses Chinese labels.
+Enable Deer Notes, then click its ribbon icon or search the command palette for **打开小鹿笔记** (Open Deer Notes). Choose **Settings → Deer Notes → Interface language → English** to switch the interface. The default is Simplified Chinese. Notes, tags, and folder names are not translated.
 
 ### Capture a note
 
@@ -74,7 +78,7 @@ Minimum supported version: Obsidian 1.7.2.
 
 ## 预览验收
 
-当前正式版本为 `0.1.1`，包含简约笔记卡片、知识概览和小鹿标志。历史预览标签为 `0.1.0-preview.2`。发布文件见 [GitHub Releases](https://github.com/ekowang-pd/obsidianknow/releases)。移动端验收尚未完成。
+当前正式版本为 `0.1.2`，包含简约笔记卡片、知识概览和小鹿标志。历史预览标签为 `0.1.0-preview.2`。发布文件见 [GitHub Releases](https://github.com/ekowang-pd/obsidianknow/releases)。移动端验收尚未完成。
 
 安装与验收步骤见 [预览验收清单](docs/preview-acceptance.md)。摘录保存期间显示“正在保存”，暂时禁用取消，并阻止 Escape、关闭阅读器和切换文档丢弃当前编辑器；保存失败后保留原文和草稿，可重试。
 

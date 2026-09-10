@@ -1,5 +1,6 @@
+import { translate } from "./i18n";
 import { Notice, Plugin } from "obsidian";
-import type { TFile } from "obsidian";
+import type { TFile, Command } from "obsidian";
 
 import { NoteService } from "./services/note-service";
 import { VaultIndex } from "./services/vault-index";
@@ -20,6 +21,8 @@ export default class DeerNotesPlugin extends Plugin {
   private index: VaultIndex | null = null;
   private notes: NoteService | null = null;
   private disposed = false;
+  private openCommand?: Command;
+  private ribbon?: HTMLElement;
   private activation: Promise<void> | null = null;
 
   async onload(): Promise<void> {
@@ -41,14 +44,18 @@ export default class DeerNotesPlugin extends Plugin {
       return view;
     });
     const activate = () => { void this.activateView().catch(error => this.showError(error)); };
-    this.addRibbonIcon("notebook-pen", "打开小鹿笔记", activate);
-    this.addCommand({ id: "open-dashboard", name: "打开小鹿笔记", callback: activate });
+    this.ribbon = this.addRibbonIcon("notebook-pen", translate(this.settings.language, "打开小鹿笔记"), activate);
+    this.openCommand = this.addCommand({ id: "open-dashboard", name: translate(this.settings.language, "打开小鹿笔记"), callback: activate });
   }
 
   async saveSettings(next: DeerNotesSettings): Promise<void> {
     const previousFolder = this.settings.notesFolder;
-    this.settings = normalizeSettings(next);
-    await this.saveData(this.settings);
+    const normalized = normalizeSettings(next);
+    await this.saveData(normalized);
+    this.settings = normalized;
+    const entryLabel = translate(this.settings.language, "打开小鹿笔记");
+    if (this.openCommand) this.openCommand.name = entryLabel;
+    this.ribbon?.setAttribute("aria-label", entryLabel);
     if (this.index && !this.disposed) {
       this.notes = new NoteService(this.app.vault, this.settings);
       if (previousFolder !== this.settings.notesFolder) {

@@ -1,6 +1,6 @@
 {
   "name": "deer-notes",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Capture quick notes, read Markdown, save excerpts, and explore your knowledge through a local-first dashboard.",
   "license": "MIT",
   "scripts": {

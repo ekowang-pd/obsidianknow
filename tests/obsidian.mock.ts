@@ -55,6 +55,9 @@ export class Setting {
     return this;
   }
 
+  addDropdown(callback: (component: DropdownComponent) => void): this {
+    callback(new DropdownComponent(this.containerEl)); return this;
+  }
   addText(callback: (component: TextComponent) => void): this {
     callback(new TextComponent(this.containerEl));
     return this;
@@ -86,4 +89,8 @@ export class TextComponent {
 
 export class Notice {
   constructor(_message: string) {}
+}
+
+export class DropdownComponent extends TextComponent {
+ addOption(_value: string, _label: string): this { return this; }
 }

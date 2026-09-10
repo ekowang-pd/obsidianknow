@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n";
 import { Component, MarkdownRenderer, Notice, parseYaml } from "obsidian";
 import { setFilledIcon } from "./icons";
 import { parseDeerNote } from "../domain/notes";
@@ -16,11 +17,12 @@ export class ReaderController {
   private menuCleanups: (() => void)[] = [];
   private restoreBackground: (() => void)[] = [];
   private trigger: HTMLElement | null = null;
+  private t = (source: string, ...values: unknown[]) => translate(this.language(), source, ...values);
   private revision = 0;
   private disposed = false;
   private scrollPosition: { top: number; left: number } | null = null;
 
-  constructor(private app: App, private host: HTMLElement, private notes: () => NoteService) {}
+  constructor(private app: App, private host: HTMLElement, private notes: () => NoteService, private language: () => Language = () => "zh-CN") {}
 
   async open(filePath: string): Promise<void> {
     if (this.disposed || this.editor?.isSaving) return;
@@ -37,24 +39,24 @@ export class ReaderController {
     this.host.classList.add("deer-reader-open");
     const root = this.element(this.host, "section", "deer-reader");
     this.root = root;
-    root.setAttribute("aria-label", "文档阅读器");
+    root.setAttribute("aria-label", this.t("文档阅读器"));
     const header = this.element(root, "header", "deer-reader-header");
     const close = this.element(header, "button", "deer-reader-close");
-    close.setAttribute("aria-label", "返回列表");
+    close.setAttribute("aria-label", this.t("返回列表"));
     const backIcon = this.element(close, "span", "deer-icon");
     backIcon.setAttribute("aria-hidden", "true"); setFilledIcon(backIcon, "arrow-left");
-    this.element(close, "span", "", "返回列表");
+    this.element(close, "span", "", this.t("返回列表"));
     close.type = "button";
     const title = this.element(header, "div", "deer-reader-title");
-    this.element(title, "span", "deer-reader-folder", filePath.split("/").slice(0, -1).join(" / ") || "根目录");
+    this.element(title, "span", "deer-reader-folder", filePath.split("/").slice(0, -1).join(" / ") || this.t("根目录"));
     title.title = filePath;
     this.element(title, "span", "deer-sr-only", filePath);
-    const open = this.element(header, "button", "deer-reader-external", "在 Obsidian 中打开");
+    const open = this.element(header, "button", "deer-reader-external", this.t("在 Obsidian 中打开"));
     open.type = "button";
     const content = this.element(root, "article", "deer-reader-content markdown-rendered");
     this.content = content; content.tabIndex = -1;
-    content.textContent = "正在加载…";
-    this.editor = new SelectionNoteController(root, this.notes, () => content.focus());
+    content.textContent = this.t("正在加载…");
+    this.editor = new SelectionNoteController(root, this.notes, () => content.focus(), this.language);
     this.listen(close, "click", () => this.close());
     this.listen(open, "click", () => {
       try { void this.app.workspace.getLeaf("tab").openFile(this.resolveFile(filePath)).catch(error => this.showError(error, revision)); }
@@ -133,6 +135,19 @@ export class ReaderController {
     this.trigger = null;
   }
 
+  refreshLanguage(): void {
+    if (!this.root) return;
+    this.root.setAttribute("aria-label", this.t("文档阅读器"));
+    const back = this.root.querySelector(".deer-reader-close");
+    back?.setAttribute("aria-label", this.t("返回列表"));
+    const label = back?.querySelector("span:not(.deer-icon)");
+    if (label) label.textContent = this.t("返回列表");
+    const external = this.root.querySelector(".deer-reader-external");
+    if (external) external.textContent = this.t("在 Obsidian 中打开");
+    this.editor?.refreshLanguage();
+    this.hideMenu();
+  }
+
   dispose(): void { this.disposed = true; this.close(); }
 
   private updateSelection(filePath: string): boolean {
@@ -145,7 +160,7 @@ export class ReaderController {
     this.hideMenu();
     const menu = this.element(this.root, "div", "deer-selection-menu"); this.menu = menu;
     menu.classList.add("deer-selection-menu-pending");
-    const button = this.element(menu, "button", "mod-cta", "做笔记"); button.type = "button";
+    const button = this.element(menu, "button", "mod-cta", this.t("做笔记")); button.type = "button";
     const down = (event: Event) => event.preventDefault();
     const click = () => { this.hideMenu(); this.editor?.open(anchor, filePath); };
     button.addEventListener("pointerdown", down); button.addEventListener("click", click);
@@ -186,14 +201,14 @@ export class ReaderController {
   private resolveFile(path: string): TFile {
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!file || !("extension" in file) || typeof file.extension !== "string" || file.extension.toLowerCase() !== "md") {
-      throw new Error(`笔记已移动或不存在：${path}`);
+      throw new Error(this.t("笔记已移动或不存在：{0}", path));
     }
     return file as TFile;
   }
 
   private showError(error: unknown, revision: number): void {
     if (revision !== this.revision || !this.root || this.disposed) return;
-    const message = `无法打开笔记：${error instanceof Error ? error.message : "请重试"}`;
+    const message = this.t("无法打开笔记：{0}", error instanceof Error ? error.message : "请重试");
     const alert = this.element(this.root, "p", "deer-error", message); alert.setAttribute("role", "alert");
     new Notice(message);
   }

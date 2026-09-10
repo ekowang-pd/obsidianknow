@@ -3,7 +3,7 @@ import '../styles.css';
 import { DeerNotesView } from '../src/views/dashboard-view';
 import { VaultIndex } from '../src/services/vault-index';
 import { NoteService } from '../src/services/note-service';
-import { DEFAULT_SETTINGS } from '../src/settings';
+import { DEFAULT_SETTINGS, normalizeSettings } from '../src/settings';
 import { createNoteMarkdown } from '../src/domain/notes';
 import { PreviewVault, STORAGE_KEY } from './vault';
 import type { StoredEntry } from './vault';
@@ -26,8 +26,10 @@ vault.beforeWrite = async () => {
   await new Promise(resolve => window.setTimeout(resolve, 2000));
   if (choice === 'fail') throw new Error('模拟保存失败；原文和草稿已保留，请重试');
 };
-const index = new VaultIndex(vault as never, DEFAULT_SETTINGS);
-const notes = new NoteService(vault as never, DEFAULT_SETTINGS);
+const languageKey = 'deer-notes-preview-language';
+const settings = normalizeSettings({ ...DEFAULT_SETTINGS, language: window.localStorage.getItem(languageKey) });
+const index = new VaultIndex(vault as never, settings);
+const notes = new NoteService(vault as never, settings);
 const app = { vault, workspace: {
   getLeaf: () => ({ openFile: async () => { new Notice('浏览器预览：此操作会在 Obsidian 中打开原文件'); } }),
   openLinkText: async (path: string, source: string) => {
@@ -35,11 +37,21 @@ const app = { vault, workspace: {
   },
 } };
 const host = document.querySelector<HTMLElement>('#app')!;
-const view: DeerNotesView = new DeerNotesView({ app, contentEl: host } as never, index, notes, DEFAULT_SETTINGS,
+const view: DeerNotesView = new DeerNotesView({ app, contentEl: host } as never, index, notes, settings,
   path => view.openReader(path), async path => {
     const file = vault.getAbstractFileByPath(path); if (!file || !('content' in file)) throw new Error('文件不存在'); return file.content;
   });
 await view.onOpen();
+const language = document.querySelector<HTMLSelectElement>('#language')!;
+language.value = settings.language ?? 'zh-CN';
+language.addEventListener('change', () => {
+  const next = language.value === 'en' ? 'en' : 'zh-CN';
+  try { window.localStorage.setItem(languageKey, next); }
+  catch { new Notice('Could not save language. Please try again.'); return; }
+  view.updateSettings({ ...settings, language: next });
+  settings.language = next;
+  updatePreviewLanguage(next);
+});
 
 const settingsDialog = document.querySelector<HTMLDialogElement>('#preview-settings')!;
 const settingsButton = document.querySelector<HTMLButtonElement>('#open-settings')!;
@@ -57,3 +69,21 @@ document.querySelector('#export')!.addEventListener('click', () => {
   const link = document.createElement('a'); link.href = url; link.download = '小鹿笔记-预览导出.md'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 new EventSource('/esbuild').addEventListener('change', () => location.reload());
+
+function updatePreviewLanguage(language: string): void {
+ const en = language === 'en'; document.documentElement.lang = language;
+ document.title = en ? 'Deer Notes · Preview' : '小鹿笔记 · 调试预览';
+ const texts: Record<string, [string,string]> = {
+ '#settings-title':['设置','Settings'], '#open-settings':['设置','Settings'], '#close-settings':['关闭','Close'],
+ '#export':['导出笔记','Export notes'], '#reset':['重置示例','Reset demo'],
+ '.preview-settings-description':['小鹿笔记 · 调试预览。示例数据保存在此浏览器。','Deer Notes · Preview. Demo data is saved in this browser.'],
+ '.preview-footer span':['本地预览 · Obsidian 原生功能请在插件中验收','Local preview · Verify native features in Obsidian']
+ };
+ for (const [selector, values] of Object.entries(texts)) {const el=document.querySelector(selector);if(el)el.textContent=values[en?1:0];}
+ document.querySelector('#close-settings')?.setAttribute('aria-label',en?'Close settings':'关闭设置');
+ const labels: Record<string,[string,string]> = {theme:['外观 ','Appearance '],width:['宽度 ','Width '],'save-mode':['保存 ','Save mode ']};
+ for(const [id,values] of Object.entries(labels)){const label=document.querySelector('#'+id)?.parentElement;if(label?.firstChild)label.firstChild.textContent=values[en?1:0];}
+ const options: Record<string,[string,string]> = {light:['浅色','Light'],dark:['深色','Dark'],full:['自适应','Responsive'],'390':['窄屏 390px','Narrow 390px'],'768':['平板 768px','Tablet 768px'],normal:['正常','Normal'],slow:['延迟 2 秒','Delay 2 seconds'],fail:['下次失败','Fail next save']};
+ for(const el of document.querySelectorAll<HTMLOptionElement>('option')){const pair=options[el.value];if(pair)el.textContent=pair[en?1:0];}
+}
+updatePreviewLanguage(settings.language ?? 'zh-CN');

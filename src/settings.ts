@@ -1,12 +1,15 @@
+import { translate, type Language } from "./i18n";
 import { Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 
 export interface DeerNotesSettings {
+  language?: Language;
   notesFolder: string;
   attachmentsFolder: string;
   hiddenRootFolders: string[];
 }
 
 export const DEFAULT_SETTINGS: DeerNotesSettings = {
+  language: "zh-CN",
   notesFolder: "小鹿笔记",
   attachmentsFolder: "附件",
   hiddenRootFolders: []
@@ -68,6 +71,7 @@ export function normalizeSettings(input: unknown): DeerNotesSettings {
     : {};
 
   return {
+    language: stored.language === "en" ? "en" : "zh-CN",
     notesFolder: normalizedStoredPath(stored.notesFolder, DEFAULT_SETTINGS.notesFolder),
     attachmentsFolder: normalizedStoredPath(
       stored.attachmentsFolder,
@@ -92,8 +96,17 @@ export class DeerNotesSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("笔记目录")
-      .setDesc("小鹿笔记保存 Markdown 文件的 Vault 内相对目录。")
+      .setName(this.plugin.settings.language === "en" ? "Interface language" : "界面语言")
+      .setDesc(this.plugin.settings.language === "en" ? "Changes interface text only. Notes and folder names stay unchanged." : "仅切换界面文字，不修改笔记内容和文件夹名称。")
+      .addDropdown(dropdown => dropdown.addOption("zh-CN", "简体中文").addOption("en", "English")
+        .setValue(this.plugin.settings.language ?? "zh-CN")
+        .onChange(async value => {
+          try { await this.plugin.saveSettings({ ...this.plugin.settings, language: value === "en" ? "en" : "zh-CN" }); this.display(); }
+          catch { new Notice(this.plugin.settings.language === "en" ? "Could not save language. Please try again." : "语言设置保存失败，请重试。"); }
+        }));
+    new Setting(containerEl)
+      .setName(translate(this.plugin.settings.language, "笔记目录"))
+      .setDesc(translate(this.plugin.settings.language, "小鹿笔记保存 Markdown 文件的 Vault 内相对目录。"))
       .addText((text) => {
         text
           .setPlaceholder(DEFAULT_SETTINGS.notesFolder)
@@ -103,8 +116,8 @@ export class DeerNotesSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("附件目录")
-      .setDesc("位于笔记目录内的附件子目录。")
+      .setName(translate(this.plugin.settings.language, "附件目录"))
+      .setDesc(translate(this.plugin.settings.language, "位于笔记目录内的附件子目录。"))
       .addText((text) => {
         text
           .setPlaceholder(DEFAULT_SETTINGS.attachmentsFolder)
@@ -114,11 +127,11 @@ export class DeerNotesSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("隐藏的根目录")
-      .setDesc("以英文逗号分隔；这些目录不会显示在小鹿笔记导航中。")
+      .setName(translate(this.plugin.settings.language, "隐藏的根目录"))
+      .setDesc(translate(this.plugin.settings.language, "以英文逗号分隔；这些目录不会显示在小鹿笔记导航中。"))
       .addText((text) => {
         text
-          .setPlaceholder("例如：模板, 附件库")
+          .setPlaceholder(translate(this.plugin.settings.language, "例如：模板, 附件库"))
           .setValue(this.plugin.settings.hiddenRootFolders.join(", "))
           .onChange(async (value) => this.saveHiddenRootFolders(value));
       });

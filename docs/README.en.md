@@ -14,9 +14,13 @@ Deer Notes is a local-first dashboard for quick notes, Markdown reading, and exc
 - **Knowledge overview:** Explore document growth over 7, 30, or 90 days, folder distribution, recent updates, and recent articles in each category.
 - **Activity heatmap:** View note modification activity over the past 13 weeks.
 
+## Interface language
+
+In Obsidian, open Settings → Deer Notes and select English under Interface language (界面语言). The selection is saved per vault and updates the open dashboard without discarding drafts.
+
 ## Getting started
 
-Enable Deer Notes, then click its ribbon icon or search the command palette for **打开小鹿笔记** (Open Deer Notes). The interface currently uses Chinese labels.
+Enable Deer Notes, then click its ribbon icon or search the command palette for **打开小鹿笔记** (Open Deer Notes). Choose **Settings → Deer Notes → Interface language → English** to switch the interface. The default is Simplified Chinese. Notes, tags, and folder names are not translated.
 
 ### Capture a note
 
