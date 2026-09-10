@@ -7,12 +7,12 @@ import { TestElement } from "./dom.mock";
 
 const empty: VaultSnapshot = { rootFolders: [], markdownFiles: [], deerNotes: [] };
 const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 function setup(snapshot = empty, readBody = async (_path: string) => "body") {
   const unsubscribe = vi.fn();
   let listener: (value: VaultSnapshot) => void = () => {};
-  const index = { getSnapshot: () => snapshot, subscribe: (callback: typeof listener) => { listener = callback; return unsubscribe; } };
+  const index = { initialize: vi.fn(async () => {}), getSnapshot: () => snapshot, subscribe: (callback: typeof listener) => { listener = callback; return unsubscribe; } };
   const service = { saveQuickNote: vi.fn(async (_input: unknown) => ({ path: "小鹿笔记/草稿.md" })), saveAttachment: vi.fn(async (_file: unknown) => "附件/image.png") };
   const openFile = vi.fn();
   const view = new DeerNotesView({ app: {} } as never, index as never, service as never, DEFAULT_SETTINGS, openFile, readBody);
@@ -24,6 +24,49 @@ function setup(snapshot = empty, readBody = async (_path: string) => "body") {
 }
 
 describe("DeerNotesView", () => {
+  it("shows recent modification activity using file mtime and moves activity when that file changes", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 10, 12));
+    const note = { path: "小鹿笔记/old.md", name: "old.md", basename: "old", extension: "md", title: "Old", source: "", tags: [], created: "2026-01-01", updated: "2026-01-01", ctime: new Date(2026, 0, 1).getTime(), mtime: new Date(2026, 8, 9, 12).getTime() };
+    const ui = setup({ ...empty, deerNotes: [note], markdownFiles: [note] });
+    await ui.view.onOpen();
+    const cell = (date: string) => ui.root.find(node => node.className === "deer-heat-cell" && node.title.startsWith(date))[0];
+    expect(cell("2026-09-09").dataset.level).toBe("1");
+    expect(ui.root.find(node => node.textContent === "最近修改活动")).toHaveLength(1);
+    const changed = { ...note, mtime: new Date(2026, 8, 10, 10).getTime() };
+    ui.publish({ ...empty, deerNotes: [changed], markdownFiles: [changed] });
+    await flush();
+    expect(cell("2026-09-09").dataset.level).toBe("0");
+    expect(cell("2026-09-10").dataset.level).toBe("1");
+    expect(ui.root.find(node => node.className === "deer-heat-cell")).toHaveLength(91);
+    await ui.view.onClose();
+  });
+
+  it.each(["close", "hide"] as const)("cleans up resources registered by a late preview renderer after %s", async action => {
+    const ui = setup();
+    await ui.view.onOpen();
+    ui.draft("preview draft");
+    let finish!: () => void;
+    const external = new EventTarget();
+    let received = 0;
+    vi.spyOn(MarkdownRenderer, "render").mockImplementationOnce(async (_app, _markdown, target, _path, component) => {
+      await new Promise<void>(resolve => { finish = resolve; });
+      const listener = () => { received += 1; };
+      external.addEventListener("refresh", listener);
+      component.register(() => external.removeEventListener("refresh", listener));
+      target.textContent = "late preview";
+    });
+    ui.action("preview").click();
+    if (action === "close") await ui.view.onClose();
+    else ui.action("preview").click();
+    finish();
+    await flush();
+    external.dispatchEvent(new Event("refresh"));
+    expect(received).toBe(0);
+    expect(ui.root.find(node => node.textContent === "late preview")).toHaveLength(0);
+    if (action === "hide") await ui.view.onClose();
+  });
+
   it("opens without writes, renders 91 labeled empty cells and disposes its subscription", async () => {
     const ui = setup();
     await ui.view.onOpen();
@@ -79,7 +122,7 @@ describe("DeerNotesView", () => {
   });
 
   it("routes list opens by descriptor path and refreshes settings without losing a draft", async () => {
-    const descriptor = { path: "01 收件箱/a.md", name: "a.md", basename: "a", extension: "md" };
+    const descriptor = { path: "01 收件箱/a.md", name: "a.md", basename: "a", extension: "md", ctime: 1000, mtime: 2000 };
     const snapshot = { ...empty, rootFolders: [{ path: "01 收件箱", name: "01 收件箱" }], markdownFiles: [descriptor] };
     const ui = setup(snapshot);
     await ui.view.onOpen();
@@ -105,7 +148,7 @@ describe("DeerNotesView", () => {
   it("does not start more body reads after closing a view with an in-flight search", async () => {
     let resolve!: (body: string) => void;
     const read = vi.fn(() => new Promise<string>(done => { resolve = done; }));
-    const notes = ["a", "b"].map(name => ({ path: `小鹿笔记/${name}.md`, name: `${name}.md`, basename: name, extension: "md", title: name, source: "", tags: [], created: "2026-09-10", updated: "2026-09-10" }));
+    const notes = ["a", "b"].map(name => ({ path: `小鹿笔记/${name}.md`, name: `${name}.md`, basename: name, extension: "md", title: name, source: "", tags: [], created: "2026-09-10", updated: "2026-09-10", ctime: 1000, mtime: 2000 }));
     const ui = setup({ ...empty, deerNotes: notes, markdownFiles: notes }, read);
     await ui.view.onOpen();
     const search = ui.root.find(node => node.type === "search")[0];
@@ -184,5 +227,17 @@ describe("DeerNotesView", () => {
     ui.publish(empty);
     await flush();
     expect(ui.root.ownerDocument.activeElement === ui.textarea()).toBe(true);
+  });
+
+  it("preserves a focused unselected navigation item when the sidebar refreshes", async () => {
+    const folders = [{ path: "01 收件箱", name: "01 收件箱" }];
+    const ui = setup({ ...empty, rootFolders: folders });
+    await ui.view.onOpen();
+    ui.root.find(node => node.dataset.folder === "01 收件箱")[0].focus();
+    ui.publish({ ...empty, rootFolders: [...folders, { path: "10 项目", name: "10 项目" }] });
+    await flush();
+    expect(ui.root.ownerDocument.activeElement?.dataset.folder).toBe("01 收件箱");
+    expect(ui.action("notes").getAttribute("aria-current")).toBe("page");
+    await ui.view.onClose();
   });
 });

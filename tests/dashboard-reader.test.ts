@@ -4,7 +4,7 @@ import DeerNotesPlugin from "../src/main";
 import type { DeerNotesView } from "../src/views/dashboard-view";
 
 it("opens a dashboard descriptor in its internal reader and disposes it on view close", async () => {
-  const file = { path: "docs/source.md", name: "source.md", basename: "source", extension: "md" };
+  const file = { path: "docs/source.md", name: "source.md", basename: "source", extension: "md", stat: { ctime: 1000, mtime: 2000, size: 100 } };
   const app = {
     vault: {
       getRoot: () => ({ children: [{ path: "docs", name: "docs", children: [] }] }),

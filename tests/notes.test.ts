@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
+import { parseYaml, stringifyYaml } from "obsidian";
+import { parse as parseYamlDates } from "yaml";
 
 import {
-  appendNoteMarkdown,
+  appendNoteMarkdown as appendWithYaml,
+  type AppendNoteInput,
   createNoteMarkdown,
   noteTitle,
-  parseDeerNote,
+  parseDeerNote as parseWithYaml,
   uniqueNotePath
 } from "../src/domain/notes";
 
-const createdAt = new Date("2026-09-10T12:14:39+08:00");
+const createdAt = new Date(2026, 8, 10, 12, 14, 39);
+const parseDeerNote = (content: string) => parseWithYaml(content, parseYaml);
+const appendNoteMarkdown = (content: string, entry: AppendNoteInput) => appendWithYaml(content, entry, { parse: parseYaml, stringify: stringifyYaml });
 
 describe("deer note titles and paths", () => {
   it("uses the cleaned first non-empty paragraph as the title", () => {
@@ -58,6 +63,43 @@ describe("deer note titles and paths", () => {
 });
 
 describe("deer note Markdown", () => {
+  it.each([
+    "tags:\n  - 思考\n  - '复盘'",
+    "tags: [思考, '复盘']",
+    "tags:\n- 思考\n- 复盘"
+  ])("recognizes Properties-edited YAML dates, quoted type and tags: %s", tags => {
+    const content = `---\ntype: 'deer-note' # plugin note\ncreated: 2026-09-10\nupdated: '2026-09-11'\nsource: Inbox/a.md\n${tags}\n\naliases:\n  - 我的别名\n---\n\n# 既有笔记\n\n正文\n`;
+    expect(parseDeerNote(content)).toEqual({
+      title: "既有笔记", created: "2026-09-10", updated: "2026-09-11",
+      source: "Inbox/a.md", tags: ["思考", "复盘"]
+    });
+  });
+
+  it("recognizes YAML timestamp dates and empty Properties fields", () => {
+    const content = "---\ntype: deer-note\ncreated: 2026-09-10\nupdated: 2026-09-10\nsource:\ntags:\n---\n\n# 独立笔记\n";
+    expect(parseWithYaml(content, yaml => parseYamlDates(yaml, { customTags: ["timestamp"] })))
+      .toMatchObject({ created: "2026-09-10", updated: "2026-09-10", source: "", tags: [] });
+  });
+
+  it("recognizes a single tag stored as an ordinary YAML scalar", () => {
+    const content = "---\ntype: deer-note\ncreated: 2026-09-10\nupdated: 2026-09-10\ntags: 思考\n---\n\n# 既有笔记\n";
+    expect(parseDeerNote(content)?.tags).toEqual(["思考"]);
+    expect(parseDeerNote(appendNoteMarkdown(content, { body: "新增 #复盘", excerpt: "", date: new Date(2026, 8, 10) }))?.tags).toEqual(["思考", "复盘"]);
+  });
+
+  it("preserves unrelated YAML properties and the original body when appending after a Properties edit", () => {
+    const content = `---\ntype: deer-note\ncreated: 2026-09-10\nupdated: '2026-09-10'\nsource: Inbox/a.md\ntags:\n  - 思考\naliases: [一个别名, 'another: alias']\nrating: 5\npublished: false\ncustom:\n  nested: [one, two]\nsummary: |\n  多行说明\n  保留内容\n---\n\n# 既有笔记\n\n正文尾部保留空格  \n\nupdated: 正文不应改写\ntags: 正文不应改写\n`;
+    const appended = appendNoteMarkdown(content, { body: "第二条 #复盘", excerpt: "选文", date: new Date(2026, 8, 11, 8) });
+    const properties = parseYaml(appended.split("---")[1]);
+    expect(properties).toMatchObject({
+      type: "deer-note", created: "2026-09-10", updated: "2026-09-11", source: "Inbox/a.md",
+      tags: ["思考", "复盘"], aliases: ["一个别名", "another: alias"], rating: 5,
+      published: false, custom: { nested: ["one", "two"] }, summary: "多行说明\n保留内容\n"
+    });
+    expect(appended).toContain("# 既有笔记\n\n正文尾部保留空格  \n\nupdated: 正文不应改写\ntags: 正文不应改写\n\n## 08:00:00");
+    expect(parseDeerNote(appended)?.tags).toEqual(["思考", "复盘"]);
+  });
+
   it("creates the exact source-note frontmatter and body format", () => {
     expect(createNoteMarkdown({
       title: "我的想法",
@@ -134,7 +176,7 @@ tags: ["思考"]
     const appended = appendNoteMarkdown(original, {
       body: "第二条 #复盘",
       excerpt: "第二段",
-      date: new Date("2026-09-11T08:00:01+08:00")
+      date: new Date(2026, 8, 11, 8, 0, 1)
     });
 
     expect(parseDeerNote(appended)).toMatchObject({
@@ -145,14 +187,13 @@ tags: ["思考"]
       tags: ["思考", "复盘"]
     });
     expect(appended).toContain("## 08:00:01\n\n> 第二段\n\n第二条 #复盘");
-    expect(appended).toContain("source: \"01 收件箱/原文.md\"");
     expect(appended).toContain("# 我的想法");
     expect(appended.match(/来源：/g)).toHaveLength(1);
     const withTrailingWhitespace = original.replace("个人判断 #思考\n", "个人判断 #思考  \n");
     expect(appendNoteMarkdown(withTrailingWhitespace, {
       body: "保留原文",
       excerpt: "",
-      date: new Date("2026-09-11T09:00:00+08:00")
+      date: new Date(2026, 8, 11, 9)
     })).toContain("个人判断 #思考  \n\n## 09:00:00");
     const legacyNumericTag = original.replace(
       'tags: ["思考"]',
@@ -161,7 +202,7 @@ tags: ["思考"]
     expect(parseDeerNote(appendNoteMarkdown(legacyNumericTag, {
       body: "新条目 #新标签",
       excerpt: "",
-      date: new Date("2026-09-11T10:00:00+08:00")
+      date: new Date(2026, 8, 11, 10)
     }))?.tags).toEqual(["思考", "复盘", "新标签"]);
     expect(() => appendNoteMarkdown("# 用户笔记", {
       body: "不应写入",

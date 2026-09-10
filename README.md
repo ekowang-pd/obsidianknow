@@ -15,7 +15,7 @@
 1. 从对应版本的 GitHub Release 下载且仅下载 `main.js`、`manifest.json` 和 `styles.css`。
 2. 在目标 Vault 创建 `.obsidian/plugins/deer-notes/`。
 3. 将这三个文件复制到该目录，重启 Obsidian 或重新加载插件。
-4. 在 Obsidian 的第三方插件设置中启用“小鹿笔记”。
+4. 在 Obsidian 的第三方插件设置中启用“Deer Notes”；插件界面显示为“小鹿笔记”。
 
 插件启用和打开看板不会创建笔记文件；首次保存才会创建默认目录。
 
@@ -54,6 +54,14 @@ npm run dev
 ```
 
 ## 发布流程
+
+### 开发依赖审计
+
+2026-09-10 的 `npm audit` 报告 3 个中等严重度开发依赖项：`@vitest/mocker` 与 `vitest` 涉及 [GHSA-82fw-gwwq-j7x9](https://github.com/advisories/GHSA-82fw-gwwq-j7x9)，`esbuild` 涉及 [GHSA-67mh-4wv8-2f99](https://github.com/advisories/GHSA-67mh-4wv8-2f99)。它们不属于插件运行时依赖。本次保留现有工具版本；审计建议的升级涉及破坏性版本，应另行完成兼容性验证后再升级。
+
+`yaml` 仅作为测试依赖，用真实 YAML 解析器验证 frontmatter 行为；发布插件使用 Obsidian 提供的 YAML API。
+
+### 发布步骤
 
 1. 同步 `package.json`、`manifest.json` 和 `versions.json` 中的版本与最低 Obsidian 版本。
 2. 执行完整本地开发验证和 `npm run release:check`。

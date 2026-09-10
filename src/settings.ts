@@ -99,6 +99,7 @@ export class DeerNotesSettingTab extends PluginSettingTab {
           .setPlaceholder(DEFAULT_SETTINGS.notesFolder)
           .setValue(this.plugin.settings.notesFolder)
           .onChange(async (value) => this.savePath("notesFolder", value));
+        this.suggestFolders(text.inputEl, "notesFolder");
       });
 
     new Setting(containerEl)
@@ -109,6 +110,7 @@ export class DeerNotesSettingTab extends PluginSettingTab {
           .setPlaceholder(DEFAULT_SETTINGS.attachmentsFolder)
           .setValue(this.plugin.settings.attachmentsFolder)
           .onChange(async (value) => this.savePath("attachmentsFolder", value));
+        this.suggestFolders(text.inputEl, "attachmentsFolder");
       });
 
     new Setting(containerEl)
@@ -120,6 +122,31 @@ export class DeerNotesSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.hiddenRootFolders.join(", "))
           .onChange(async (value) => this.saveHiddenRootFolders(value));
       });
+  }
+
+  private suggestFolders(input: HTMLInputElement, key: "notesFolder" | "attachmentsFolder"): void {
+    const list = input.ownerDocument.createElement("datalist");
+    const id = `deer-folders-${crypto.randomUUID()}`;
+    list.setAttribute("id", id);
+    input.setAttribute("list", id);
+    this.containerEl.append(list);
+    const refresh = () => {
+      const prefix = key === "attachmentsFolder" ? `${this.plugin.settings.notesFolder}/` : "";
+      const paths = this.plugin.app.vault.getAllLoadedFiles()
+        .filter(entry => "children" in entry && entry.path && !entry.path.split("/").some(part => part.startsWith(".")))
+        .filter(entry => entry.path.startsWith(prefix))
+        .map(entry => entry.path.slice(prefix.length))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right, "zh-CN", { numeric: true }));
+      list.replaceChildren();
+      for (const path of paths) {
+        const option = input.ownerDocument.createElement("option");
+        option.value = path;
+        list.append(option);
+      }
+    };
+    input.addEventListener("focus", refresh);
+    refresh();
   }
 
   private async savePath(

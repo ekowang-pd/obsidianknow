@@ -1,10 +1,10 @@
 {
   "id": "deer-notes",
-  "name": "小鹿笔记",
+  "name": "Deer Notes",
   "version": "0.1.0",
   "minAppVersion": "1.7.0",
   "description": "A local-first Obsidian plugin for quick notes, reading, excerpts, and recent note activity.",
-  "author": "",
+  "author": "EDY",
   "authorUrl": "",
   "isDesktopOnly": false
 }

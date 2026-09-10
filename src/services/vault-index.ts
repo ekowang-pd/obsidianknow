@@ -1,4 +1,5 @@
 import type { EventRef, TAbstractFile, TFile, TFolder } from "obsidian";
+import { parseYaml } from "obsidian";
 
 import type { DeerNoteMeta } from "../domain/notes";
 import { parseDeerNote } from "../domain/notes";
@@ -10,6 +11,7 @@ type VaultEvent = "create" | "modify" | "delete" | "rename";
 export interface VaultIndexAdapter {
   getRoot(): TFolder;
   getMarkdownFiles(): TFile[];
+  getAbstractFileByPath(path: string): TAbstractFile | null;
   cachedRead(file: TFile): Promise<string>;
   on(event: VaultEvent, callback: (...args: any[]) => unknown): EventRef;
   offref(ref: EventRef): void;
@@ -25,6 +27,8 @@ export interface VaultFileDescriptor {
   readonly name: string;
   readonly basename: string;
   readonly extension: string;
+  readonly ctime: number;
+  readonly mtime: number;
 }
 
 export interface DeerNoteDescriptor extends VaultFileDescriptor {
@@ -67,6 +71,7 @@ export class VaultIndex {
   private snapshot: VaultSnapshot = freezeSnapshot([], [], []);
   private eventQueue: Promise<void> = Promise.resolve();
   private initialized = false;
+  private initialization: Promise<void> | null = null;
   private disposed = false;
   private lifecycle = 0;
 
@@ -85,7 +90,37 @@ export class VaultIndex {
       return;
     }
 
-    const lifecycle = this.lifecycle;
+    if (!this.initialization) {
+      const lifecycle = this.lifecycle;
+      let releaseScan!: () => void;
+      this.eventQueue = new Promise<void>(resolve => { releaseScan = resolve; });
+      this.registerEvents();
+      this.initialization = this.scan(lifecycle).then(async () => {
+        releaseScan();
+        // Events observed during the scan must finish before the first snapshot.
+        let pending: Promise<void>;
+        do {
+          pending = this.eventQueue;
+          await pending;
+        } while (this.isActive(lifecycle) && pending !== this.eventQueue);
+        if (this.isActive(lifecycle)) {
+          this.initialized = true;
+          this.publish();
+        }
+      }).catch(error => {
+        if (this.isActive(lifecycle)) {
+          this.lifecycle += 1;
+          this.unregisterEvents();
+          this.initialization = null;
+        }
+        releaseScan();
+        throw error;
+      });
+    }
+    await this.initialization;
+  }
+
+  private async scan(lifecycle: number): Promise<void> {
     const rootFolders = new Map<string, TFolder>();
     const markdownFiles = new Map<string, TFile>();
     const deerNotes = new Map<string, IndexedDeerNote>();
@@ -114,9 +149,6 @@ export class VaultIndex {
     replaceMap(this.rootFolders, rootFolders);
     replaceMap(this.markdownFiles, markdownFiles);
     replaceMap(this.deerNotes, deerNotes);
-    this.registerEvents();
-    this.initialized = true;
-    this.publish();
   }
 
   getSnapshot(): VaultSnapshot {
@@ -134,10 +166,7 @@ export class VaultIndex {
     }
     this.disposed = true;
     this.lifecycle += 1;
-    for (const ref of this.eventRefs) {
-      this.vault.offref(ref);
-    }
-    this.eventRefs.length = 0;
+    this.unregisterEvents();
     this.listeners.clear();
   }
 
@@ -148,6 +177,11 @@ export class VaultIndex {
       this.vault.on("delete", (entry: TAbstractFile) => this.enqueue((lifecycle) => this.handleDelete(entry, lifecycle))),
       this.vault.on("rename", (entry: TAbstractFile, oldPath: string) => this.enqueue((lifecycle) => this.handleRename(entry, oldPath, lifecycle)))
     );
+  }
+
+  private unregisterEvents(): void {
+    for (const ref of this.eventRefs) this.vault.offref(ref);
+    this.eventRefs.length = 0;
   }
 
   private enqueue(operation: (lifecycle: number) => Promise<void>): Promise<void> {
@@ -188,9 +222,7 @@ export class VaultIndex {
       return;
     }
     this.replaceMarkdownFile(entry, read.meta);
-    if (isWithinFolder(entry.path, this.notesFolder)) {
-      this.publish();
-    }
+    this.publish();
   }
 
   private async handleDelete(entry: TAbstractFile, lifecycle: number): Promise<void> {
@@ -233,9 +265,13 @@ export class VaultIndex {
 
   private async renameFolder(folder: TFolder, oldPath: string, lifecycle: number): Promise<void> {
     const prefix = `${oldPath}/`;
-    const descendants = [...this.markdownFiles.entries()]
-      .filter(([path]) => path.startsWith(prefix));
-    const updated = await Promise.all(descendants.map(async ([oldFilePath, file]) => ({
+    const descendants = new Map([...this.markdownFiles.entries()]
+      .filter(([path]) => path.startsWith(prefix)).map(([path, file]) => [file, path]));
+    // A descendant renamed during its first read may not be indexed yet.
+    for (const file of markdownDescendants(folder)) {
+      if (!descendants.has(file)) descendants.set(file, file.path);
+    }
+    const updated = await Promise.all([...descendants].map(async ([file, oldFilePath]) => ({
       oldFilePath,
       file,
       read: await this.readDeerNote(file)
@@ -266,8 +302,13 @@ export class VaultIndex {
     if (!isWithinFolder(state.path, this.notesFolder)) {
       return { current: this.isCurrentMarkdownFile(state), meta: null };
     }
-    const meta = parseDeerNote(await this.vault.cachedRead(file));
-    return { current: this.isCurrentMarkdownFile(state), meta };
+    try {
+      const meta = parseDeerNote(await this.vault.cachedRead(file), parseYaml);
+      return { current: this.isCurrentMarkdownFile(state), meta };
+    } catch (error) {
+      if (!this.isCurrentMarkdownFile(state)) return { current: false, meta: null };
+      throw error;
+    }
   }
 
   private replaceMarkdownFile(file: TFile, meta: DeerNoteMeta | null): void {
@@ -323,10 +364,11 @@ export class VaultIndex {
     return isMarkdownFile(state.file) &&
       state.file.path === state.path &&
       state.file.extension === state.extension &&
-      this.vault.getMarkdownFiles().some((file) => file === state.file);
+      this.vault.getAbstractFileByPath(state.path) === state.file;
   }
 
   private publish(): void {
+    if (!this.initialized) return;
     this.snapshot = freezeSnapshot(
       [...this.rootFolders.values()],
       [...this.markdownFiles.values()],
@@ -368,7 +410,7 @@ function fileDescriptor(file: TFile): VaultFileDescriptor {
   const basename = suffix && name.toLowerCase().endsWith(suffix.toLowerCase())
     ? name.slice(0, -suffix.length)
     : name;
-  return Object.freeze({ path: file.path, name, basename, extension });
+  return Object.freeze({ path: file.path, name, basename, extension, ctime: file.stat.ctime, mtime: file.stat.mtime });
 }
 
 function deerNoteDescriptor({ file, meta }: IndexedDeerNote): DeerNoteDescriptor {
@@ -392,6 +434,10 @@ function captureFileState(file: TFile): FileState {
 
 function isFolder(entry: TAbstractFile): entry is TFolder {
   return "children" in entry;
+}
+
+function markdownDescendants(folder: TFolder): TFile[] {
+  return folder.children.flatMap(entry => isFolder(entry) ? markdownDescendants(entry) : isMarkdownFile(entry) ? [entry] : []);
 }
 
 function isMarkdownFile(entry: TAbstractFile): entry is TFile {

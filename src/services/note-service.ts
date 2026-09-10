@@ -1,4 +1,5 @@
 import type { TAbstractFile, TFile, TFolder } from "obsidian";
+import { parseYaml, stringifyYaml } from "obsidian";
 
 import type { DeerNotesSettings } from "../settings";
 import { validateVaultPath } from "../settings";
@@ -26,7 +27,7 @@ export interface NoteVaultAdapter {
   create(path: string, data: string): Promise<TFile>;
   createBinary(path: string, data: ArrayBuffer): Promise<TFile>;
   cachedRead(file: TFile): Promise<string>;
-  modify(file: TFile, data: string): Promise<void>;
+  process(file: TFile, transform: (data: string) => string): Promise<string>;
 }
 
 export interface QuickNoteInput {
@@ -87,25 +88,26 @@ export class NoteService {
       }));
     }
 
-    const latest = await this.vault.cachedRead(matching);
-    const meta = parseDeerNote(latest);
-    const liveFile = this.vault.getAbstractFileByPath(matching.path);
-    if (
-      liveFile !== matching ||
-      !isMarkdownFile(liveFile) ||
-      !isWithinFolder(liveFile.path, this.notesFolder) ||
-      !meta ||
-      meta.source !== input.source ||
-      meta.created !== localDate(input.date)
-    ) {
-      throw new Error("关联笔记已不再匹配，请重试保存");
-    }
+    await this.vault.process(matching, latest => {
+      const meta = parseDeerNote(latest, parseYaml);
+      const liveFile = this.vault.getAbstractFileByPath(matching.path);
+      if (
+        liveFile !== matching ||
+        !isMarkdownFile(liveFile) ||
+        !isWithinFolder(liveFile.path, this.notesFolder) ||
+        !meta ||
+        meta.source !== input.source ||
+        meta.created !== localDate(input.date)
+      ) {
+        throw new Error("关联笔记已不再匹配，请重试保存");
+      }
 
-    await this.vault.modify(matching, appendNoteMarkdown(latest, {
-      body: input.body,
-      excerpt: input.excerpt,
-      date: input.date
-    }));
+      return appendNoteMarkdown(latest, {
+        body: input.body,
+        excerpt: input.excerpt,
+        date: input.date
+      }, { parse: parseYaml, stringify: stringifyYaml });
+    });
     return matching;
   }
 
@@ -132,7 +134,7 @@ export class NoteService {
       }
 
       const content = await this.vault.cachedRead(entry);
-      const meta = parseDeerNote(content);
+      const meta = parseDeerNote(content, parseYaml);
       if (meta?.source === source && meta.created === created) {
         return entry;
       }

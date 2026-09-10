@@ -6,7 +6,7 @@ import type { VaultFileDescriptor, VaultSnapshot } from "../src/services/vault-i
 
 const file = (path: string): VaultFileDescriptor => {
   const name = path.split("/").pop()!;
-  return Object.freeze({ path, name, basename: name.slice(0, -3), extension: "md" });
+  return Object.freeze({ path, name, basename: name.slice(0, -3), extension: "md", ctime: 1000, mtime: 2000 });
 };
 const note = Object.freeze({ ...file("小鹿笔记/Alpha.md"), title: "Alpha idea", source: "Books/Design.md", created: "2026-09-10", updated: "2026-09-10", tags: Object.freeze([]) });
 const snapshot: VaultSnapshot = Object.freeze({

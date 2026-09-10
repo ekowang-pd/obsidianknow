@@ -17,6 +17,9 @@ describe("release contract", () => {
     const scripts = packageJson.scripts as Record<string, string>;
 
     expect(manifest.id).toBe("deer-notes");
+    expect(manifest.name).toMatch(/^[\x20-\x7E]+$/);
+    expect(manifest.author).toEqual(expect.any(String));
+    expect((manifest.author as string).trim().length).toBeGreaterThan(0);
     expect(manifest.isDesktopOnly).toBe(false);
     expect(manifest.description).toEqual(expect.any(String));
     expect((manifest.description as string).length).toBeLessThanOrEqual(250);

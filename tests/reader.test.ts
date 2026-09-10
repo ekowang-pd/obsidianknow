@@ -185,4 +185,16 @@ describe("ReaderController", () => {
     expect([parseFloat(menu.style.left), parseFloat(menu.style.top)]).toEqual([172, 294]);
     expect(menu.style.visibility).toBe("visible");
   });
+  it.each(["close", "dispose"] as const)("cancels pending menu placement before the animation frame on %s", async action => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockReturnValue(new DOMRect());
+    const pending = new Map<number, FrameRequestCallback>();
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { pending.set(7, callback); return 7; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(id => { pending.delete(id); });
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true }));
+    expect(pending.size).toBe(1);
+    ui.reader[action]();
+    expect(pending.size).toBe(0);
+    expect(ui.host.querySelector(".deer-selection-menu")).toBeNull();
+  });
 });

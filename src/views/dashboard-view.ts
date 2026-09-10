@@ -83,7 +83,8 @@ export class DeerNotesView extends ItemView {
     this.listen(this.imageInput, "change", () => { void this.attachImage(); });
     this.bindIndex();
     this.renderSidebar();
-    await this.refreshSearch();
+    await this.index.initialize();
+    if (!this.closed) await this.refreshSearch();
   }
 
   async onClose(): Promise<void> {
@@ -140,22 +141,25 @@ export class DeerNotesView extends ItemView {
 
   private renderSidebar(): void {
     const focused = this.sidebar.ownerDocument.activeElement;
-    const restoreFocus = this.sidebar.contains(focused) && Boolean(focused?.closest("button[data-action]"));
+    const focusedNav = this.sidebar.contains(focused) ? focused?.closest<HTMLButtonElement>("button[data-action]") : null;
+    let focusTarget: HTMLButtonElement | undefined;
+    let selectedButton: HTMLButtonElement | undefined;
     this.sidebar.replaceChildren();
     const brand = this.element(this.sidebar, "div", "deer-brand");
     this.renderIcon(brand, "notebook-pen");
     this.element(brand, "h1", "", "小鹿笔记");
     this.element(this.sidebar, "p", "deer-muted", "捕捉灵感，让知识慢慢生长");
-    const summary = buildContributions(this.snapshot.deerNotes.map(note => new Date(`${note.created}T00:00:00`)), new Date());
+    this.element(this.sidebar, "h2", "deer-activity-title", "最近修改活动");
+    const summary = buildContributions(this.snapshot.deerNotes.map(note => new Date(note.mtime)), new Date());
     const stats = this.element(this.sidebar, "dl", "deer-statistics");
-    for (const [label, count] of [["近 91 天笔记", summary.total], ["活跃天数", summary.activeDays], ["连续记录", summary.streak]] as const) {
+    for (const [label, count] of [["近 91 天修改", summary.total], ["活跃天数", summary.activeDays], ["连续活跃", summary.streak]] as const) {
       const stat = this.element(stats, "div", "deer-statistic");
       this.element(stat, "dt", "", label);
       this.element(stat, "dd", "", String(count));
     }
     const heatmap = this.element(this.sidebar, "div", "deer-heatmap");
     heatmap.setAttribute("role", "list");
-    heatmap.setAttribute("aria-label", "近 91 天笔记记录");
+    heatmap.setAttribute("aria-label", "最近修改活动，近 91 天");
     for (const day of summary.days) {
       const cell = this.element(heatmap, "span", "deer-heat-cell");
       cell.dataset.level = String(Math.min(day.count, 4));
@@ -163,18 +167,20 @@ export class DeerNotesView extends ItemView {
       cell.title = `${day.date}：${day.count} 条笔记`;
       cell.setAttribute("aria-label", cell.title);
     }
-    this.element(this.sidebar, "p", "deer-heat-legend", "近 91 天 · 颜色越深，记录越多");
+    this.element(this.sidebar, "p", "deer-heat-legend", "近 91 天 · 按笔记最近修改日期统计");
     const nav = this.element(this.sidebar, "nav", "deer-navigation");
     nav.setAttribute("aria-label", "笔记导航");
     for (const item of this.state.navigation) {
       const button = this.button(nav, item.label, item.kind === "folder" ? "folder" : item.kind === "notes" ? "notebook" : "chart-no-axes-combined", item.kind);
       if (item.kind === "folder") button.dataset.folder = item.id;
+      if (focusedNav?.dataset.action === button.dataset.action && focusedNav?.dataset.folder === button.dataset.folder) focusTarget = button;
       const selected = this.state.selectedView;
       if (selected.kind === item.kind && (selected.kind !== "folder" || selected.path === item.id)) {
         button.setAttribute("aria-current", "page");
-        if (restoreFocus) button.focus();
+        selectedButton = button;
       }
     }
+    if (focusedNav) (focusTarget ?? selectedButton)?.focus();
   }
 
   private renderComposer(parent: HTMLElement): void {
@@ -357,6 +363,9 @@ export class DeerNotesView extends ItemView {
       if (!this.closed && this.preview && revision === this.previewRevision) this.previewEl.replaceChildren(target);
     } catch (error) {
       if (!this.closed && revision === this.previewRevision) this.showError(`预览失败：${errorMessage(error)}`);
+    } finally {
+      // Markdown processors can register resources after clearPreview has unloaded the component.
+      if (this.closed || !this.preview || revision !== this.previewRevision) component.unload();
     }
   }
 

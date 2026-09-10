@@ -15,7 +15,7 @@ function appFixture() {
     openLinkText: vi.fn(async () => {})
   };
   const vault = {
-    getRoot: () => ({ children: [] }), getMarkdownFiles: () => [],
+    getRoot: () => ({ children: [] }), getMarkdownFiles: vi.fn(() => [] as any[]),
     on: vi.fn(() => ({})), offref: vi.fn(),
     createFolder: vi.fn(), create: vi.fn(), createBinary: vi.fn(),
     getAbstractFileByPath: vi.fn(), cachedRead: vi.fn()
@@ -24,6 +24,37 @@ function appFixture() {
 }
 
 describe("Deer Notes plugin", () => {
+  it("does not scan on plugin load or when changing settings before the first dashboard opens", async () => {
+    const app = appFixture();
+    const plugin = new DeerNotesPlugin(app as never, {} as never);
+    await plugin.onload();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    expect(app.vault.getMarkdownFiles).not.toHaveBeenCalled();
+    expect(app.vault.cachedRead).not.toHaveBeenCalled();
+    await plugin.saveSettings({ notesFolder: "新笔记", attachmentsFolder: "附件", hiddenRootFolders: [] });
+    expect(app.vault.getMarkdownFiles).not.toHaveBeenCalled();
+    expect(app.vault.on).not.toHaveBeenCalled();
+    plugin.unload();
+  });
+
+  it("initializes a restored dashboard on its first open, including files added after plugin load", async () => {
+    const app = appFixture();
+    const plugin = new DeerNotesPlugin(app as never, {} as never);
+    const registerView = vi.spyOn(plugin, "registerView");
+    await plugin.onload();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    const file = { path: "小鹿笔记/later.md", extension: "md", stat: { ctime: 1000, mtime: 2000, size: 100 } };
+    app.vault.getMarkdownFiles.mockReturnValue([file]);
+    app.vault.getAbstractFileByPath.mockReturnValue(file);
+    app.vault.cachedRead.mockResolvedValue('---\ntype: deer-note\ncreated: "2026-09-10"\nupdated: "2026-09-10"\ntags: []\n---\n\n# Later\n');
+    const view = registerView.mock.calls[0][1]({ app } as never) as DeerNotesView;
+    await view.onOpen();
+    expect((view.contentEl as unknown as TestElement).find(node => node.dataset.path === "小鹿笔记/later.md")).toHaveLength(1);
+    expect(app.vault.getMarkdownFiles).toHaveBeenCalledTimes(1);
+    await view.onClose();
+    plugin.unload();
+  });
+
   it("exports the dashboard view type", () => {
     expect(VIEW_TYPE_DEER_NOTES).toBe("deer-notes-dashboard");
   });
@@ -110,7 +141,7 @@ describe("Deer Notes plugin", () => {
 
   it("rebinds an open view when the notes folder changes, preserving its draft and resolving body reads by path", async () => {
     const app = appFixture();
-    const file = { path: "新笔记/hello.md", extension: "md" };
+    const file = { path: "新笔记/hello.md", extension: "md", stat: { ctime: 1000, mtime: 2000, size: 100 } };
     vi.spyOn(app.vault, "getMarkdownFiles").mockReturnValue([file] as never);
     app.vault.getAbstractFileByPath.mockReturnValue(file);
     app.vault.cachedRead.mockResolvedValue('---\ntype: deer-note\ncreated: "2026-09-10"\nupdated: "2026-09-10"\ntags: []\n---\n\n# Hello\n\nHidden body');

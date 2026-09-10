@@ -20,6 +20,11 @@ export interface AppendNoteInput {
   date: Date;
 }
 
+export interface FrontmatterCodec {
+  parse(yaml: string): unknown;
+  stringify(properties: Record<string, unknown>): string;
+}
+
 const FALLBACK_TITLE = "未命名笔记";
 const RESERVED_WINDOWS_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i;
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n(?:\r?\n)?/;
@@ -93,51 +98,41 @@ export function createNoteMarkdown(input: CreateNoteInput): string {
   return `${frontmatter}\n\n# ${input.title}\n\n${noteSection(input.body, input.excerpt, input.date, source)}`;
 }
 
-export function appendNoteMarkdown(existing: string, entry: AppendNoteInput): string {
-  const meta = parseDeerNote(existing);
+export function appendNoteMarkdown(existing: string, entry: AppendNoteInput, yaml: FrontmatterCodec): string {
+  const meta = parseDeerNote(existing, yaml.parse);
   const match = existing.match(FRONTMATTER);
   if (!meta || !match) {
     throw new Error("Cannot append to content that is not a deer-note");
   }
 
   const updated = localDate(entry.date);
-  const tags = distinctTags([...meta.tags, ...extractTags(existing), ...extractTags(entry.body)]);
-  const updatedExisting = existing
-    .replace(/^updated: [^\r\n]*(?=\r?$)/m, `updated: ${JSON.stringify(updated)}`)
-    .replace(/^tags: [^\r\n]*(?=\r?$)/m, `tags: ${JSON.stringify(tags)}`);
+  const tags = distinctTags([...meta.tags, ...extractTags(existing.slice(match[0].length)), ...extractTags(entry.body)]);
+  const properties = parseProperties(match[1], yaml.parse)!;
+  const newline = existing.startsWith("---\r\n") ? "\r\n" : "\n";
+  const frontmatter = yaml.stringify({ ...properties, updated, tags })
+    .replace(/\r?\n$/, "").replace(/\r?\n/g, newline);
+  const headerStart = existing.indexOf("\n") + 1;
+  const updatedExisting = existing.slice(0, headerStart) + frontmatter + existing.slice(headerStart + match[1].length);
   const separator = existing.endsWith("\n") ? "\n" : "\n\n";
 
   return `${updatedExisting}${separator}${timestampSection(entry.body, entry.excerpt, entry.date)}`;
 }
 
-export function parseDeerNote(content: string): DeerNoteMeta | null {
+export function parseDeerNote(content: string, parseYaml: FrontmatterCodec["parse"]): DeerNoteMeta | null {
   const match = content.match(FRONTMATTER);
   if (!match) {
     return null;
   }
 
-  const fields = new Map<string, string>();
-  for (const line of match[1].split(/\r?\n/)) {
-    const separator = line.indexOf(": ");
-    if (separator === -1) {
-      return null;
-    }
-
-    const key = line.slice(0, separator);
-    if (fields.has(key)) {
-      return null;
-    }
-    fields.set(key, line.slice(separator + 2));
-  }
-
-  if (fields.get("type") !== "deer-note") {
+  const fields = parseProperties(match[1], parseYaml);
+  if (fields?.type !== "deer-note") {
     return null;
   }
 
-  const created = parsedString(fields.get("created"));
-  const updated = parsedString(fields.get("updated"));
-  const source = fields.has("source") ? parsedString(fields.get("source")) : "";
-  const tags = parsedTags(fields.get("tags"));
+  const created = parsedDate(fields.created);
+  const updated = parsedDate(fields.updated);
+  const source = fields.source == null ? "" : typeof fields.source === "string" ? fields.source : null;
+  const tags = parsedTags(fields.tags);
   const title = content.slice(match[0].length).match(/^# (.+?)(?:\r?\n|$)/)?.[1];
 
   if (!created || !updated || source === null || !tags || !title) {
@@ -197,32 +192,26 @@ function normalizedTag(tag: string): string | null {
   return normalized && /\p{L}/u.test(normalized) ? normalized : null;
 }
 
-function parsedString(value: string | undefined): string | null {
-  if (value === undefined) {
-    return null;
-  }
-
+function parseProperties(yaml: string, parse: FrontmatterCodec["parse"]): Record<string, unknown> | null {
   try {
-    const parsed: unknown = JSON.parse(value);
-    return typeof parsed === "string" ? parsed : null;
+    const parsed = parse(yaml);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown> : null;
   } catch {
     return null;
   }
 }
 
-function parsedTags(value: string | undefined): string[] | null {
-  if (value === undefined) {
-    return null;
-  }
+function parsedDate(value: unknown): string | null {
+  // YAML timestamp scalars describe calendar dates, independently of the local timezone.
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
 
-  try {
-    const parsed: unknown = JSON.parse(value);
-    return Array.isArray(parsed) && parsed.every((tag) => typeof tag === "string")
-      ? parsed
-      : null;
-  } catch {
-    return null;
-  }
+function parsedTags(value: unknown): string[] | null {
+  if (value == null || value === "") return [];
+  if (typeof value === "string") return [value];
+  return Array.isArray(value) && value.every(tag => typeof tag === "string") ? value : null;
 }
 
 function localDate(date: Date): string {

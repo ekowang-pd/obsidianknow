@@ -19,7 +19,6 @@ export default class DeerNotesPlugin extends Plugin {
   private dashboardSettingsRefresh: (() => void) | null = null;
   private index: VaultIndex | null = null;
   private notes: NoteService | null = null;
-  private ready: Promise<void> = Promise.resolve();
   private disposed = false;
   private activation: Promise<void> | null = null;
 
@@ -33,10 +32,6 @@ export default class DeerNotesPlugin extends Plugin {
       this.index?.dispose();
       this.dashboardSettingsRefresh = null;
     });
-    const initialIndex = this.index;
-    this.ready = new Promise<void>(resolve => this.app.workspace.onLayoutReady(resolve))
-      .then(async () => { if (!this.disposed && this.index === initialIndex) await initialIndex.initialize(); });
-    void this.ready.catch(error => this.showError(error));
     this.registerView(VIEW_TYPE_DEER_NOTES, leaf => {
       const view: DeerNotesView = new DeerNotesView(
         leaf, this.index!, this.notes!, this.settings,
@@ -59,12 +54,11 @@ export default class DeerNotesPlugin extends Plugin {
       if (previousFolder !== this.settings.notesFolder) {
         this.index.dispose();
         this.index = new VaultIndex(this.app.vault, this.settings);
-        this.ready = this.index.initialize();
       }
-      for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_DEER_NOTES)) {
-        if (leaf.view instanceof DeerNotesView) leaf.view.updateSettings(this.settings, this.index, this.notes);
-      }
-      await this.ready;
+      const views = this.app.workspace.getLeavesOfType(VIEW_TYPE_DEER_NOTES)
+        .map(leaf => leaf.view).filter((view): view is DeerNotesView => view instanceof DeerNotesView);
+      for (const view of views) view.updateSettings(this.settings, this.index, this.notes);
+      if (views.length) await this.index.initialize();
     }
     this.dashboardSettingsRefresh?.();
   }
@@ -77,7 +71,7 @@ export default class DeerNotesPlugin extends Plugin {
   }
 
   private async openDashboard(): Promise<void> {
-    await this.ready;
+    await this.index?.initialize();
     if (this.disposed) return;
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_DEER_NOTES)[0];
     if (!leaf) {

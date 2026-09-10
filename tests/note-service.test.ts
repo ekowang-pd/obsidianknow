@@ -23,6 +23,7 @@ class MemoryVault implements NoteVaultAdapter {
   private readonly entries = new Map<string, TAbstractFile>();
   private readonly root = { path: "", children: [] } as unknown as MemoryFolder;
   beforeRead: ((readCount: number) => void) | undefined;
+  beforeWrite: ((file: TFile) => void) | undefined;
   failCreate: Error | undefined;
 
   getAbstractFileByPath(path: string): TAbstractFile | null {
@@ -71,8 +72,17 @@ class MemoryVault implements NoteVaultAdapter {
   }
 
   async modify(file: TFile, content: string): Promise<void> {
+    this.beforeWrite?.(file);
     this.calls.push(`modify:${file.path}`);
     (file as MemoryFile).content = content;
+  }
+
+  async process(file: TFile, transform: (content: string) => string): Promise<string> {
+    this.beforeWrite?.(file);
+    const content = transform((file as MemoryFile).content);
+    this.calls.push(`process:${file.path}`);
+    (file as MemoryFile).content = content;
+    return content;
   }
 
   addMarkdown(path: string, content: string): TFile {
@@ -187,7 +197,36 @@ describe("NoteService", () => {
     expect(vault.reads).toContain(sameDay?.path);
   });
 
-  it("re-reads and re-validates a matching excerpt immediately before append", async () => {
+  it("appends to the same note after ordinary Obsidian Properties edits", async () => {
+    const vault = new MemoryVault();
+    await vault.createFolder("小鹿笔记");
+    const existing = vault.addMarkdown("小鹿笔记/已有.md", "---\ntype: 'deer-note'\ncreated: 2026-09-10\nupdated: 2026-09-10\nsource: Inbox/a.md\ntags:\n  - 思考\naliases: [已确认]\n---\n\n# 已有\n\n原有正文\n");
+    const service = new NoteService(vault, DEFAULT_SETTINGS);
+    const saved = await service.saveExcerptNote({ source: "Inbox/a.md", excerpt: "新选文", body: "新笔记 #复盘", date: new Date(2026, 8, 10, 10) });
+    expect(saved).toBe(existing);
+    expect(vault.markdownFiles()).toHaveLength(1);
+    expect((saved as MemoryFile).content).toContain("原有正文");
+    expect((saved as MemoryFile).content).toContain("新笔记 #复盘");
+  });
+
+  it("preserves an external edit made after matching an excerpt and before its atomic append", async () => {
+    const vault = new MemoryVault();
+    const service = new NoteService(vault, DEFAULT_SETTINGS);
+    const first = await service.saveExcerptNote({
+      source: "Inbox/a.md", excerpt: "原文 A", body: "想法 A", date: new Date(2026, 8, 10, 9)
+    });
+    vault.beforeWrite = () => { (first as MemoryFile).content += "\n外部编辑，必须保留。\n"; };
+
+    await service.saveExcerptNote({
+      source: "Inbox/a.md", excerpt: "原文 B", body: "想法 B", date: new Date(2026, 8, 10, 10)
+    });
+
+    expect((first as MemoryFile).content).toContain("外部编辑，必须保留。");
+    expect((first as MemoryFile).content).toContain("想法 B");
+    expect(vault.markdownFiles()).toHaveLength(1);
+  });
+
+  it("re-validates matching metadata inside the atomic append", async () => {
     const vault = new MemoryVault();
     const service = new NoteService(vault, DEFAULT_SETTINGS);
     const first = await service.saveExcerptNote({
@@ -196,11 +235,7 @@ describe("NoteService", () => {
       body: "想法 A",
       date: new Date(2026, 8, 10, 9, 0, 0)
     });
-    vault.beforeRead = (readCount) => {
-      if (readCount === 2) {
-        (first as MemoryFile).content = "# 用户刚修改的普通笔记";
-      }
-    };
+    vault.beforeWrite = () => { (first as MemoryFile).content = "# 用户刚修改的普通笔记"; };
 
     await expect(service.saveExcerptNote({
       source: "Inbox/a.md",
@@ -208,11 +243,11 @@ describe("NoteService", () => {
       body: "想法 B",
       date: new Date(2026, 8, 10, 10, 0, 0)
     })).rejects.toThrow("已不再匹配");
-    expect(vault.reads).toEqual([first.path, first.path]);
+    expect(vault.reads).toEqual([first.path]);
     expect((first as MemoryFile).content).toBe("# 用户刚修改的普通笔记");
   });
 
-  it("does not append when the live matched file moved outside the notes folder during its final read", async () => {
+  it("does not append when the live matched file moved outside the notes folder before the atomic write", async () => {
     const vault = new MemoryVault();
     const service = new NoteService(vault, DEFAULT_SETTINGS);
     const first = await service.saveExcerptNote({
@@ -221,11 +256,7 @@ describe("NoteService", () => {
       body: "想法 A",
       date: new Date(2026, 8, 10, 9, 0, 0)
     });
-    vault.beforeRead = (readCount) => {
-      if (readCount === 2) {
-        vault.move(first, "收件箱/被移动.md");
-      }
-    };
+    vault.beforeWrite = () => { vault.move(first, "收件箱/被移动.md"); };
 
     await expect(service.saveExcerptNote({
       source: "Inbox/a.md",

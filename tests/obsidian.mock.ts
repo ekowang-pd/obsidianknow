@@ -1,4 +1,5 @@
 import { TestElement } from "./dom.mock";
+export { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 export class Component {
   private cleanups: (() => unknown)[] = [];
@@ -38,15 +39,13 @@ export class MarkdownRenderer {
 }
 
 export class PluginSettingTab {
-  containerEl = {
-    empty(): void {}
-  };
+  containerEl = new TestElement();
 
   constructor(_app: unknown, _plugin: Plugin) {}
 }
 
 export class Setting {
-  constructor(_containerEl: unknown) {}
+  constructor(private containerEl: TestElement) {}
 
   setName(): this {
     return this;
@@ -57,21 +56,30 @@ export class Setting {
   }
 
   addText(callback: (component: TextComponent) => void): this {
-    callback(new TextComponent());
+    callback(new TextComponent(this.containerEl));
     return this;
   }
 }
 
 export class TextComponent {
-  setValue(): this {
+  readonly inputEl: TestElement;
+  constructor(container: TestElement) {
+    this.inputEl = container.ownerDocument.createElement("input");
+    container.append(this.inputEl);
+  }
+
+  setValue(value: string): this {
+    this.inputEl.value = value;
     return this;
   }
 
-  setPlaceholder(): this {
+  setPlaceholder(value: string): this {
+    this.inputEl.placeholder = value;
     return this;
   }
 
-  onChange(): this {
+  onChange(callback: (value: string) => unknown): this {
+    this.inputEl.addEventListener("input", () => callback(this.inputEl.value));
     return this;
   }
 }

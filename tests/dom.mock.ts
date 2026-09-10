@@ -30,6 +30,7 @@ export class TestElement {
     this.children = [];
     this.append(...nodes);
   }
+  empty(): void { this.replaceChildren(); }
   setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null; }
   focus(): void { this.ownerDocument.activeElement = this; }
