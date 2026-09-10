@@ -16,6 +16,17 @@ const snapshot: VaultSnapshot = Object.freeze({
 });
 
 describe("DashboardState", () => {
+  it("shows recently modified notes first without changing the snapshot and matches frontmatter tags", async () => {
+    const tagged = { ...note, path: "小鹿笔记/new.md", mtime: 3000, tags: ["阅读"] };
+    const notes = Object.freeze([note, tagged]);
+    const read = vi.fn(async () => "unrelated");
+    const state = new DashboardState({ ...snapshot, deerNotes: notes }, DEFAULT_SETTINGS, read);
+    expect(state.visibleFiles.map(file => file.path)).toEqual([tagged.path, note.path]);
+    expect(notes[0]).toBe(note);
+    await state.setSearchQuery("#阅读");
+    expect(state.visibleFiles).toEqual([tagged]);
+    expect(read).not.toHaveBeenCalledWith(tagged.path);
+  });
   it("orders fixed and visible root navigation and shows only deer-notes initially", () => {
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS);
     expect(state.navigation.map(item => item.id)).toEqual(["all-notes", "01 收件箱", "10 项目", "overview"]);

@@ -1,4 +1,6 @@
-import { Component, MarkdownRenderer, Notice } from "obsidian";
+import { Component, MarkdownRenderer, Notice, parseYaml } from "obsidian";
+import { setFilledIcon } from "./icons";
+import { parseDeerNote } from "../domain/notes";
 import type { App, TFile } from "obsidian";
 import type { NoteService } from "../services/note-service";
 import { selectionFromRange } from "./selection-model";
@@ -37,12 +39,17 @@ export class ReaderController {
     this.root = root;
     root.setAttribute("aria-label", "文档阅读器");
     const header = this.element(root, "header", "deer-reader-header");
-    const close = this.element(header, "button", "deer-reader-close", "关闭阅读器");
+    const close = this.element(header, "button", "deer-reader-close");
+    close.setAttribute("aria-label", "返回列表");
+    const backIcon = this.element(close, "span", "deer-icon");
+    backIcon.setAttribute("aria-hidden", "true"); setFilledIcon(backIcon, "arrow-left");
+    this.element(close, "span", "", "返回列表");
     close.type = "button";
     const title = this.element(header, "div", "deer-reader-title");
-    this.element(title, "h2", "", filePath.split("/").pop()?.replace(/\.md$/i, ""));
-    this.element(title, "p", "deer-muted", filePath);
-    const open = this.element(header, "button", "", "在 Obsidian 中打开");
+    this.element(title, "span", "deer-reader-folder", filePath.split("/").slice(0, -1).join(" / ") || "根目录");
+    title.title = filePath;
+    this.element(title, "span", "deer-sr-only", filePath);
+    const open = this.element(header, "button", "deer-reader-external", "在 Obsidian 中打开");
     open.type = "button";
     const content = this.element(root, "article", "deer-reader-content markdown-rendered");
     this.content = content; content.tabIndex = -1;
@@ -90,7 +97,18 @@ export class ReaderController {
         // Late Markdown processors may register children after the first unload.
         if (revision !== this.revision || this.disposed) component.unload();
       }
-      if (revision === this.revision && !this.disposed) content.replaceChildren(target);
+      if (revision === this.revision && !this.disposed) {
+        if (!target.querySelector("h1")) {
+          const folder = title.querySelector(".deer-reader-folder");
+          if (folder) folder.textContent = filePath.replace(/\.md$/i, "").split("/").join(" / ");
+        }
+        if (parseDeerNote(markdown, parseYaml)) {
+          for (const heading of Array.from(target.querySelectorAll("h2"))) {
+            if (/^\d{2}:\d{2}:\d{2}$/.test(heading.textContent?.trim() ?? "")) heading.classList.add("deer-note-timestamp");
+          }
+        }
+        content.replaceChildren(target);
+      }
     } catch (error) {
       if (revision === this.revision && !this.disposed) { content.replaceChildren(); this.showError(error, revision); }
     }

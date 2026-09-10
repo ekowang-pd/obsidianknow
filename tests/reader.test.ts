@@ -23,7 +23,7 @@ function setup() {
   const notes = { saveExcerptNote: vi.fn(async (_input: unknown) => file) };
   const reader = new ReaderController(app as never, host, () => notes as never);
   controllers.push(reader);
-  const button = (label: string) => [...host.querySelectorAll("button")].find(el => el.textContent === label)!;
+  const button = (label: string) => [...host.querySelectorAll("button")].find(el => (el.getAttribute("aria-label") ?? el.textContent) === label)!;
   const select = () => {
     const content = host.querySelector<HTMLElement>(".deer-reader-content")!;
     const range = document.createRange(); range.selectNodeContents(content);
@@ -36,6 +36,17 @@ function setup() {
 }
 
 describe("ReaderController", () => {
+  it.each([true, false])("styles timestamp headings only in owned notes (owned: %s)", async owned => {
+    const ui = setup();
+    ui.app.vault.cachedRead.mockResolvedValue(owned ? '---\ntype: deer-note\ncreated: "2026-09-10"\nupdated: "2026-09-10"\n---\n\n# Title' : '# Title');
+    vi.spyOn(MarkdownRenderer, "render").mockImplementationOnce(async (_app, _md, target) => {
+      const host = target as unknown as HTMLElement;
+      host.innerHTML = '<h1>Title</h1><h2>12:34:56</h2><p>My words</p><h2>A section</h2>';
+    });
+    await ui.reader.open("docs/source.md");
+    expect(ui.host.querySelectorAll(".deer-note-timestamp")).toHaveLength(owned ? 1 : 0);
+    expect(ui.host.querySelector(".deer-reader-content")?.textContent).toContain("My words");
+  });
   it("reads the live file, renders Markdown with its source path and opens Obsidian only explicitly", async () => {
     const ui = setup(); const render = vi.spyOn(MarkdownRenderer, "render");
     await ui.reader.open("docs/source.md");
@@ -46,7 +57,7 @@ describe("ReaderController", () => {
     expect(ui.openFile).not.toHaveBeenCalled();
     ui.button("在 Obsidian 中打开").click(); await flush();
     expect(ui.openFile).toHaveBeenCalledWith(ui.file);
-    ui.button("关闭阅读器").click();
+    ui.button("返回列表").click();
     expect(ui.host.querySelector(".deer-reader")).toBeNull();
     expect(document.activeElement).toBe(ui.trigger);
   });
@@ -140,7 +151,7 @@ describe("ReaderController", () => {
     ui.host.querySelector("textarea")!.value = "important draft"; ui.button("保存笔记").click();
     if (action === "cancel") ui.button("取消").click();
     else if (action === "escape") ui.escape();
-    else if (action === "close-reader") ui.button("关闭阅读器").click();
+    else if (action === "close-reader") ui.button("返回列表").click();
     else await ui.reader.open("docs/other.md");
     expect(ui.host.querySelector("textarea")?.value).toBe("important draft");
     fail(new Error("disk full")); await flush();

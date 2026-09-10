@@ -57,4 +57,5 @@ export class TestElement {
 class TestDocument {
   activeElement: TestElement | null = null;
   createElement(tag: string): TestElement { return new TestElement(tag, this); }
+  createElementNS(_namespace: string, tag: string): TestElement { return new TestElement(tag, this); }
 }

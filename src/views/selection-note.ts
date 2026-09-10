@@ -25,11 +25,14 @@ export class SelectionNoteController {
     root.setAttribute("aria-modal", "true");
     root.tabIndex = -1;
     this.root = root;
+    this.element(root, "h2", "deer-excerpt-heading", "摘录笔记");
+    this.element(root, "p", "deer-excerpt-source", `来自 ${filePath.split("/").pop()?.replace(/\.md$/i, "")}`);
     const excerpt = this.element(root, "blockquote", "deer-excerpt", anchor.excerpt);
     excerpt.setAttribute("aria-label", "原文摘录（只读）");
     const label = this.element(root, "label", "", "笔记（Markdown）");
     const input = this.element(label, "textarea", "deer-excerpt-input");
     input.rows = 6;
+    input.placeholder = "写下你的理解，或一个新的想法…";
     const error = this.element(root, "p", "deer-error");
     error.hidden = true;
     error.setAttribute("role", "alert");

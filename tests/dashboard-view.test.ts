@@ -24,6 +24,23 @@ function setup(snapshot = empty, readBody = async (_path: string) => "body") {
 }
 
 describe("DeerNotesView", () => {
+  it("limits concurrent excerpts, ignores stale results after navigation and reuses loaded bodies", async () => {
+    const pending: ((body: string) => void)[] = [];
+    const read = vi.fn(() => new Promise<string>(resolve => pending.push(resolve)));
+    const notes = ["a", "b", "c"].map(name => ({ path: `小鹿笔记/${name}.md`, name: `${name}.md`, basename: name, extension: "md", title: name, source: "", tags: [], created: "2026-09-10", updated: "2026-09-10", ctime: 1000, mtime: 2000 }));
+    const ui = setup({ ...empty, deerNotes: notes, markdownFiles: notes }, read);
+    await ui.view.onOpen(); await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+    ui.action("overview").click(); await flush();
+    pending[0]("# a\n\nA summary"); pending[1]("# b\n\nB summary"); await flush();
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(ui.root.find(node => node.className === "deer-note-summary")).toHaveLength(0);
+    ui.action("notes").click(); await flush();
+    expect(read).toHaveBeenCalledTimes(3);
+    pending[2]("# c\n\nC summary"); await flush();
+    expect(ui.root.find(node => node.className === "deer-note-summary").map(node => node.textContent)).toEqual(["A summary", "B summary", "C summary"]);
+    await ui.view.onClose();
+  });
   it("shows recent modification activity using file mtime and moves activity when that file changes", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 8, 10, 12));
@@ -127,13 +144,24 @@ describe("DeerNotesView", () => {
     const ui = setup(snapshot);
     await ui.view.onOpen();
     ui.draft("unsaved");
+    const composer = ui.root.find(node => node.className === "deer-composer")[0];
+    expect(composer.hidden).toBe(false);
     ui.root.find(node => node.dataset.folder === "01 收件箱")[0].click();
     await flush();
+    expect(composer.hidden).toBe(true);
     ui.action("open-file").click();
     expect(ui.openFile).toHaveBeenCalledWith("01 收件箱/a.md");
     ui.view.updateSettings({ ...DEFAULT_SETTINGS, hiddenRootFolders: ["01 收件箱"] });
     expect(ui.textarea().value).toBe("unsaved");
     expect(ui.root.find(node => node.dataset.folder === "01 收件箱")).toHaveLength(0);
+    expect(composer.hidden).toBe(false);
+    ui.action("overview").click();
+    await flush();
+    expect(composer.hidden).toBe(true);
+    ui.action("notes").click();
+    await flush();
+    expect(composer.hidden).toBe(false);
+    expect(ui.textarea().value).toBe("unsaved");
   });
 
   it.each([["unordered", "- one\n- two"], ["ordered", "1. one\n2. two"]])("formats selected lines once with %s", async (action, expected) => {
@@ -154,10 +182,11 @@ describe("DeerNotesView", () => {
     const search = ui.root.find(node => node.type === "search")[0];
     search.value = "hidden";
     search.dispatch("input");
+    const readsBeforeClose = read.mock.calls.length;
     await ui.view.onClose();
     resolve("hidden");
     await flush();
-    expect(read).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(readsBeforeClose);
     expect(ui.root.children).toEqual([]);
   });
 

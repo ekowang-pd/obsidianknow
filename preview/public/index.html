@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小鹿笔记 · 调试预览</title><link rel="stylesheet" href="/generated/app.css">
+</head>
+<body>
+  <dialog id="preview-settings" aria-labelledby="settings-title">
+    <header class="preview-settings-header"><h2 id="settings-title">设置</h2><button id="close-settings" aria-label="关闭设置">关闭</button></header>
+    <p class="preview-settings-description">小鹿笔记 · 调试预览<br>示例数据保存在此浏览器。</p>
+    <div class="preview-controls">
+      <label>外观 <select id="theme"><option value="light">浅色</option><option value="dark">深色</option></select></label>
+      <label>宽度 <select id="width"><option value="full">自适应</option><option value="390">窄屏 390px</option><option value="768">平板 768px</option></select></label>
+      <label>保存 <select id="save-mode"><option value="normal">正常</option><option value="slow">延迟 2 秒</option><option value="fail">下次失败</option></select></label>
+      <button id="export">导出笔记</button>
+      <button id="reset">重置示例</button>
+    </div>
+  </dialog>
+  <div class="preview-stage"><div id="app"></div></div>
+  <footer class="preview-footer"><span>本地预览 · Obsidian 原生功能请在插件中验收</span><button id="open-settings" aria-haspopup="dialog">设置</button></footer>
+  <div id="notices" aria-live="polite"></div>
+  <script type="module" src="/generated/app.js"></script>
+</body></html>

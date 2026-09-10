@@ -30,7 +30,8 @@ export class DashboardState {
 
   get visibleFiles(): DashboardFile[] {
     const query = this.searchQuery.trim().toLocaleLowerCase();
-    return this.candidates().filter(file => !query || this.matchesMetadata(file, query) || this.bodyMatches.has(file.path));
+    return this.candidates().filter(file => !query || this.matchesMetadata(file, query) || this.bodyMatches.has(file.path))
+      .sort((a, b) => b.mtime - a.mtime);
   }
 
   selectNotes(): void { this.select({ kind: "notes" }); }
@@ -79,7 +80,7 @@ export class DashboardState {
   }
 
   private matchesMetadata(file: DashboardFile, query: string): boolean {
-    return [file.basename, file.path, ...("title" in file ? [file.title, file.source] : [])]
+    return [file.basename, file.path, ...("title" in file ? [file.title, file.source, ...file.tags.map(tag => `#${tag}`)] : [])]
       .some(value => value.toLocaleLowerCase().includes(query));
   }
 

@@ -1,4 +1,7 @@
-import { Component, ItemView, MarkdownRenderer, Notice, setIcon } from "obsidian";
+import { Component, ItemView, MarkdownRenderer, Notice } from "obsidian";
+import { setFilledIcon } from "./icons";
+import { renderKnowledgeOverview } from "./overview";
+import type { OverviewDays } from "../domain/overview";
 import type { WorkspaceLeaf } from "obsidian";
 
 import { buildContributions } from "../domain/contributions";
@@ -8,6 +11,7 @@ import type { DeerNotesSettings } from "../settings";
 import { DashboardState } from "./dashboard-state";
 import type { ReadBody } from "./dashboard-state";
 import { ReaderController } from "./reader";
+import { noteSummary } from "./note-summary";
 
 export const VIEW_TYPE_DEER_NOTES = "deer-notes-dashboard";
 export type OpenDashboardFile = (filePath: string) => void | Promise<void>;
@@ -33,7 +37,14 @@ export class DeerNotesView extends ItemView {
   private previewComponent: Component | null = null;
   private reader: ReaderController | null = null;
   private sidebar!: HTMLElement;
+  private activityEl: HTMLDetailsElement | null = null;
   private results!: HTMLElement;
+  private composer!: HTMLElement;
+  private pageTitle!: HTMLElement;
+  private searchLabel!: HTMLElement;
+  private overviewDays: OverviewDays = 30;
+  private summaryRevision = 0;
+  private summaryCache = new Map<string, { mtime: number; body: Promise<string> }>();
   private textarea!: HTMLTextAreaElement;
   private imageInput!: HTMLInputElement;
   private previewEl!: HTMLElement;
@@ -41,6 +52,7 @@ export class DeerNotesView extends ItemView {
   private search!: HTMLInputElement;
   private saveButton!: HTMLButtonElement;
   private previewButton!: HTMLButtonElement;
+  private saveLabel!: HTMLElement;
   private composerButtons: HTMLButtonElement[] = [];
 
   constructor(
@@ -49,7 +61,7 @@ export class DeerNotesView extends ItemView {
     private notes: NoteService,
     private settings: DeerNotesSettings,
     private readonly openFile: OpenDashboardFile,
-    readBody: ReadBody
+    private readonly readBody: ReadBody
   ) {
     super(leaf);
     this.snapshot = index.getSnapshot();
@@ -66,12 +78,17 @@ export class DeerNotesView extends ItemView {
     this.contentEl.className = "view-content deer-dashboard";
     this.sidebar = this.element(this.contentEl, "aside", "deer-sidebar");
     const main = this.element(this.contentEl, "main", "deer-main");
-    this.renderComposer(main);
-    const label = this.element(main, "label", "deer-search-label", "搜索笔记");
+    const pageHeader = this.element(main, "header", "deer-page-header");
+    this.pageTitle = this.element(pageHeader, "h2", "deer-page-title", "全部笔记");
+    const label = this.element(pageHeader, "label", "deer-search-label");
+    this.searchLabel = label;
+    this.element(label, "span", "deer-sr-only", "搜索笔记");
+    this.renderIcon(label, "search");
     this.search = this.element(label, "input", "deer-search");
     this.search.type = "search";
-    this.search.placeholder = "搜索标题、路径、来源或正文";
+    this.search.placeholder = "搜索笔记、标签或正文…";
     this.search.value = this.state.searchQuery;
+    this.renderComposer(main);
     this.results = this.element(main, "section", "deer-results");
     this.results.setAttribute("aria-live", "polite");
     this.listen(this.contentEl, "click", event => {
@@ -79,6 +96,12 @@ export class DeerNotesView extends ItemView {
       if (button && !button.disabled) void this.handleAction(button);
     });
     this.listen(this.textarea, "input", () => { this.draft = this.textarea.value; this.updateComposer(); });
+    this.listen(this.textarea, "keydown", event => {
+      const key = event as KeyboardEvent;
+      if (key.key === "Enter" && (key.ctrlKey || key.metaKey) && !key.isComposing) {
+        key.preventDefault(); void this.saveDraft();
+      }
+    });
     this.listen(this.search, "input", () => { void this.refreshSearch(); });
     this.listen(this.imageInput, "change", () => { void this.attachImage(); });
     this.bindIndex();
@@ -89,6 +112,8 @@ export class DeerNotesView extends ItemView {
 
   async onClose(): Promise<void> {
     this.closed = true;
+    this.summaryRevision += 1;
+    this.summaryCache.clear();
     this.reader?.dispose();
     this.reader = null;
     this.searchRevision += 1;
@@ -146,18 +171,23 @@ export class DeerNotesView extends ItemView {
     let selectedButton: HTMLButtonElement | undefined;
     this.sidebar.replaceChildren();
     const brand = this.element(this.sidebar, "div", "deer-brand");
-    this.renderIcon(brand, "notebook-pen");
+    this.renderIcon(brand, "deer-brand");
     this.element(brand, "h1", "", "小鹿笔记");
     this.element(this.sidebar, "p", "deer-muted", "捕捉灵感，让知识慢慢生长");
-    this.element(this.sidebar, "h2", "deer-activity-title", "最近修改活动");
+    const nav = this.element(this.sidebar, "nav", "deer-navigation");
+    const activity = this.element(this.sidebar, "details", "deer-activity");
+    activity.open = this.activityEl?.open ?? false;
+    this.activityEl = activity;
+    const activityToggle = this.element(activity, "summary", "deer-activity-title", "最近修改活动");
+    activityToggle.title = "展开或收起近 91 天修改活动";
     const summary = buildContributions(this.snapshot.deerNotes.map(note => new Date(note.mtime)), new Date());
-    const stats = this.element(this.sidebar, "dl", "deer-statistics");
-    for (const [label, count] of [["近 91 天修改", summary.total], ["活跃天数", summary.activeDays], ["连续活跃", summary.streak]] as const) {
+    const stats = this.element(activity, "dl", "deer-statistics");
+    for (const [label, count] of [["修改笔记", summary.total], ["活跃天数", summary.activeDays], ["连续活跃", summary.streak]] as const) {
       const stat = this.element(stats, "div", "deer-statistic");
       this.element(stat, "dt", "", label);
       this.element(stat, "dd", "", String(count));
     }
-    const heatmap = this.element(this.sidebar, "div", "deer-heatmap");
+    const heatmap = this.element(activity, "div", "deer-heatmap");
     heatmap.setAttribute("role", "list");
     heatmap.setAttribute("aria-label", "最近修改活动，近 91 天");
     for (const day of summary.days) {
@@ -167,8 +197,7 @@ export class DeerNotesView extends ItemView {
       cell.title = `${day.date}：${day.count} 条笔记`;
       cell.setAttribute("aria-label", cell.title);
     }
-    this.element(this.sidebar, "p", "deer-heat-legend", "近 91 天 · 按笔记最近修改日期统计");
-    const nav = this.element(this.sidebar, "nav", "deer-navigation");
+    this.element(activity, "p", "deer-heat-legend", "近 91 天 · 最近修改记录");
     nav.setAttribute("aria-label", "笔记导航");
     for (const item of this.state.navigation) {
       const button = this.button(nav, item.label, item.kind === "folder" ? "folder" : item.kind === "notes" ? "notebook" : "chart-no-axes-combined", item.kind);
@@ -185,6 +214,7 @@ export class DeerNotesView extends ItemView {
 
   private renderComposer(parent: HTMLElement): void {
     const composer = this.element(parent, "section", "deer-composer");
+    this.composer = composer;
     const label = this.element(composer, "label", "deer-composer-label", "快速笔记");
     this.textarea = this.element(label, "textarea", "deer-quick-input");
     this.textarea.rows = 3;
@@ -203,6 +233,8 @@ export class DeerNotesView extends ItemView {
     }
     this.saveButton = this.button(toolbar, "保存笔记", "plus", "save");
     this.saveButton.className = "deer-save mod-cta";
+    this.saveLabel = this.saveButton.lastElementChild as HTMLElement;
+    this.saveButton.title = "保存笔记（Ctrl / ⌘ + Enter）";
     this.composerButtons.push(this.saveButton);
     this.imageInput = this.element(composer, "input", "");
     this.imageInput.type = "file";
@@ -217,34 +249,77 @@ export class DeerNotesView extends ItemView {
   private renderResults(): void {
     this.results.replaceChildren();
     const selected = this.state.selectedView;
+    const summaryRevision = ++this.summaryRevision;
+    this.pageTitle.textContent = selected.kind === "notes" ? "全部笔记" : selected.kind === "overview" ? "知识概览" : selected.path;
+    this.composer.hidden = selected.kind !== "notes";
+    this.searchLabel.hidden = selected.kind === "overview";
     if (selected.kind === "overview") {
-      this.element(this.results, "h2", "", "知识概览");
-      const overview = this.element(this.results, "dl", "deer-overview");
-      for (const [label, count] of [["Markdown 文档", this.snapshot.markdownFiles.length], ["小鹿笔记", this.snapshot.deerNotes.length], ["可见根目录", this.state.navigation.filter(item => item.kind === "folder").length]] as const) {
-        const card = this.element(overview, "div", "deer-overview-card");
-        this.element(card, "dt", "", label);
-        this.element(card, "dd", "", String(count));
-      }
+      renderKnowledgeOverview(this.results, this.snapshot, this.settings, this.overviewDays);
       return;
     }
     const files = this.state.visibleFiles;
-    this.element(this.results, "h2", "", selected.kind === "notes" ? "全部笔记" : selected.path);
-    this.element(this.results, "p", "deer-muted", `${files.length} 条记录`);
+    const heading = this.element(this.results, "div", "deer-results-heading");
+    this.element(heading, "p", "deer-result-count", `${files.length} 条记录`);
     if (!files.length) {
       this.element(this.results, "p", "deer-empty", this.state.searchQuery.trim() ? "没有匹配的笔记，试试其他关键词。" : "这里还没有笔记，先记录一个想法吧。");
       return;
     }
     const list = this.element(this.results, "ul", "deer-note-list");
+    const excerpts: { path: string; mtime: number; title: string; tags: readonly string[]; element: HTMLElement; more: HTMLElement }[] = [];
     for (const file of files) {
       const row = this.element(list, "li", "deer-note-row");
-      const button = this.button(row, "title" in file ? file.title : file.basename, "file-text", "open-file");
+      const title = "title" in file ? file.title : file.basename;
+      const button = this.element(row, "button", "deer-note-link");
+      button.type = "button";
+      button.dataset.action = "open-file";
+      button.setAttribute("aria-label", title);
       button.dataset.path = file.path;
-      this.element(row, "p", "deer-note-path", file.path);
+      button.title = file.path;
+      const date = new Date(file.mtime);
+      const modified = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      this.element(button, "span", "deer-note-date", modified);
+      this.element(button, "span", "deer-note-title", title);
+      const excerpt = this.element(button, "span", "deer-note-summary");
+      const meta = this.element(button, "span", "deer-note-meta");
       if ("source" in file) {
-        this.element(row, "p", "deer-muted", `${file.updated}${file.source ? ` · 来源：${file.source}` : ""}`);
-        if (file.tags.length) this.element(row, "p", "deer-tags", file.tags.map(tag => `#${tag}`).join(" "));
+        if (file.tags.length) this.element(meta, "span", "deer-tags", file.tags.map(tag => `#${tag}`).join("  "));
+        if (file.source) this.element(meta, "span", "deer-note-source", `来自 ${file.source.split("/").pop()?.replace(/\.md$/i, "")}`);
+      } else {
+        this.element(meta, "span", "deer-note-path", file.path.split("/").slice(0, -1).join(" / ") || "根目录");
       }
+      meta.hidden = !meta.children.length;
+      const more = this.element(button, "span", "deer-note-open", "阅读全文");
+      more.hidden = true;
+      excerpts.push({ path: file.path, mtime: file.mtime, title, tags: "tags" in file ? file.tags : [], element: excerpt, more });
     }
+    let next = 0;
+    const fill = async () => {
+      while (!this.closed && summaryRevision === this.summaryRevision && next < excerpts.length) {
+        const item = excerpts[next++];
+        let cached = this.summaryCache.get(item.path);
+        if (!cached || cached.mtime !== item.mtime) {
+          cached = { mtime: item.mtime, body: Promise.resolve().then(() => {
+            if (this.closed) throw new Error("View closed");
+            return this.readBody(item.path);
+          }) };
+          if (this.summaryCache.size >= 256) this.summaryCache.delete(this.summaryCache.keys().next().value!);
+          this.summaryCache.set(item.path, cached);
+        }
+        try {
+          const body = await cached.body;
+          if (!this.closed && summaryRevision === this.summaryRevision) {
+            const summary = noteSummary(body, item.title, item.tags);
+            item.element.textContent = summary;
+            item.element.hidden = !summary;
+            item.more.hidden = summary.length < 140 && summary.split("\n").length < 5;
+          }
+        } catch {
+          if (this.summaryCache.get(item.path) === cached) this.summaryCache.delete(item.path);
+          if (!this.closed && summaryRevision === this.summaryRevision) item.element.hidden = true;
+        }
+      }
+    };
+    void fill(); void fill();
   }
 
   private async refreshSearch(): Promise<void> {
@@ -265,7 +340,14 @@ export class DeerNotesView extends ItemView {
 
   private async handleAction(button: HTMLButtonElement): Promise<void> {
     const action = button.dataset.action;
-    if (action === "notes" || action === "folder" || action === "overview") {
+    if (action === "overview-range") {
+      const days = Number(button.dataset.days);
+      if (days === 7 || days === 30 || days === 90) {
+        this.overviewDays = days;
+        this.renderResults();
+        this.results.querySelector<HTMLButtonElement>(`button[data-days="${days}"]`)?.focus();
+      }
+    } else if (action === "notes" || action === "folder" || action === "overview") {
       if (action === "notes") this.state.selectNotes();
       else if (action === "folder") this.state.selectFolder(button.dataset.folder!);
       else this.state.selectOverview();
@@ -383,6 +465,7 @@ export class DeerNotesView extends ItemView {
     this.previewEl.hidden = !this.preview;
     for (const button of this.composerButtons) button.disabled = this.busy;
     this.saveButton.disabled = this.busy || !this.draft.trim();
+    if (this.saveLabel) this.saveLabel.textContent = this.busy ? "保存中…" : "保存笔记";
     this.previewButton.setAttribute("aria-pressed", String(this.preview));
   }
 
@@ -413,7 +496,7 @@ export class DeerNotesView extends ItemView {
   private renderIcon(parent: HTMLElement, name: string): void {
     const icon = this.element(parent, "span", "deer-icon");
     icon.setAttribute("aria-hidden", "true");
-    setIcon(icon, name);
+    setFilledIcon(icon, name);
   }
 
   private element<K extends keyof HTMLElementTagNameMap>(parent: HTMLElement, tag: K, className: string, text?: string): HTMLElementTagNameMap[K] {
