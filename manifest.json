@@ -3,7 +3,7 @@
   "name": "小鹿笔记",
   "version": "0.1.0",
   "minAppVersion": "1.7.0",
-  "description": "",
+  "description": "A local-first Obsidian plugin for quick notes, reading, excerpts, and recent note activity.",
   "author": "",
   "authorUrl": "",
   "isDesktopOnly": false
