@@ -125,17 +125,38 @@ export class ReaderController {
     if (this.menu?.contains(this.host.ownerDocument.activeElement)) return true;
     this.hideMenu();
     const menu = this.element(this.root, "div", "deer-selection-menu"); this.menu = menu;
+    menu.style.visibility = "hidden";
     const button = this.element(menu, "button", "mod-cta", "做笔记"); button.type = "button";
     const down = (event: Event) => event.preventDefault();
     const click = () => { this.hideMenu(); this.editor?.open(anchor, filePath); };
     button.addEventListener("pointerdown", down); button.addEventListener("click", click);
     this.menuCleanups.push(() => { button.removeEventListener("pointerdown", down); button.removeEventListener("click", click); });
     const window = this.host.ownerDocument.defaultView!;
-    const rect = this.root.getBoundingClientRect();
-    const size = menu.getBoundingClientRect();
-    const left = Math.max(8, Math.min(anchor.rect.left, window.innerWidth - (size.width || 96) - 8));
-    const top = Math.max(8, Math.min(anchor.rect.bottom + 8, window.innerHeight - (size.height || 40) - 8));
-    menu.style.left = `${left - rect.left}px`; menu.style.top = `${top - rect.top}px`;
+    const position = (): boolean => {
+      if (this.menu !== menu || !this.root) return true;
+      const rect = this.root.getBoundingClientRect();
+      const minLeft = Math.max(0, rect.left) + 8;
+      const minTop = Math.max(0, rect.top) + 8;
+      const maxRight = Math.min(window.innerWidth, rect.right) - 8;
+      const maxBottom = Math.min(window.innerHeight, rect.bottom) - 8;
+      const width = maxRight - minLeft;
+      const height = maxBottom - minTop;
+      if (width <= 0 || height <= 0) return false;
+      menu.style.maxWidth = `${width}px`; menu.style.maxHeight = `${height}px`;
+      menu.style.boxSizing = "border-box"; menu.style.overflow = "auto";
+      const size = menu.getBoundingClientRect();
+      if (!size.width || !size.height) return false;
+      const left = Math.max(minLeft, Math.min(anchor.rect.left, maxRight - size.width));
+      const top = Math.max(minTop, Math.min(anchor.rect.bottom + 8, maxBottom - size.height));
+      menu.style.left = `${left - rect.left}px`; menu.style.top = `${top - rect.top}px`;
+      menu.style.visibility = "visible";
+      return true;
+    };
+    // A hidden menu still participates in layout; only reveal measured placement.
+    if (!position()) {
+      const frame = window.requestAnimationFrame(() => { position(); });
+      this.menuCleanups.push(() => window.cancelAnimationFrame(frame));
+    }
     return true;
   }
 

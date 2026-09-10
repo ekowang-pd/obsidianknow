@@ -8,6 +8,9 @@ const controllers: ReaderController[] = [];
 afterEach(() => { controllers.splice(0).forEach(reader => reader.dispose()); document.body.replaceChildren(); vi.restoreAllMocks(); });
 
 function setup() {
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    return this.classList.contains("deer-selection-menu") ? new DOMRect(0, 0, 96, 40) : new DOMRect(0, 0, 1024, 768);
+  });
   const host = document.createElement("div");
   const trigger = document.createElement("button");
   host.append(trigger); document.body.append(host); trigger.focus();
@@ -150,5 +153,36 @@ describe("ReaderController", () => {
     expect(ui.host.querySelector(".deer-reader")).toBeNull(); expect(ui.notes.saveExcerptNote).not.toHaveBeenCalled();
     const menu = new MouseEvent("contextmenu", { bubbles: true, cancelable: true }); content.dispatchEvent(menu);
     expect(menu.defaultPrevented).toBe(false);
+  });
+  it.each([
+    { pane: [200, 100, 300, 350], anchor: [490, 440], expected: [172, 294] },
+    { pane: [-50, -20, 450, 400], anchor: [-40, -10], expected: [58, 28] },
+    { pane: [850, 650, 300, 300], anchor: [1140, 940], expected: [46, 62] }
+  ])("keeps the measured menu within the visible intersection of pane $pane and viewport", async ({ pane, anchor, expected }) => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    const root = ui.host.querySelector<HTMLElement>(".deer-reader")!;
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue(new DOMRect(...pane));
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("deer-selection-menu") ? new DOMRect(0, 0, 120, 48) : new DOMRect();
+    });
+    const content = ui.select();
+    document.getSelection()!.getRangeAt(0).getBoundingClientRect = () => ({ left: anchor[0], bottom: anchor[1] } as DOMRect);
+    content.dispatchEvent(new Event("pointerup", { bubbles: true }));
+    const menu = ui.host.querySelector<HTMLElement>(".deer-selection-menu")!;
+    expect([parseFloat(menu.style.left), parseFloat(menu.style.top)]).toEqual(expected);
+  });
+  it("keeps an unmeasured menu invisible and places it using its measured size before revealing", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    const root = ui.host.querySelector<HTMLElement>(".deer-reader")!;
+    vi.spyOn(root, "getBoundingClientRect").mockReturnValue(new DOMRect(200, 100, 300, 350));
+    let measurable = false; let frame!: FrameRequestCallback;
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(() => measurable ? new DOMRect(0, 0, 120, 48) : new DOMRect());
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { frame = callback; return 7; });
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true }));
+    const menu = ui.host.querySelector<HTMLElement>(".deer-selection-menu")!;
+    expect(menu.style.visibility).toBe("hidden");
+    measurable = true; expect(frame).toBeTypeOf("function"); frame(0);
+    expect([parseFloat(menu.style.left), parseFloat(menu.style.top)]).toEqual([172, 294]);
+    expect(menu.style.visibility).toBe("visible");
   });
 });

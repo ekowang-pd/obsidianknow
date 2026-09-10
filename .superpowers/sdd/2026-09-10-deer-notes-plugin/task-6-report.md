@@ -41,3 +41,16 @@ Additional coverage exercises close/dispose during read, replacement during rend
 - npm audit reports three moderate development-tool findings in the existing Vitest/mocker and esbuild dependency ranges. No runtime dependency finding was reported. Major build-tool upgrades are outside Task 6 and were not performed.
 - NoteService writes are not cancellable; closing an editor during an already-started save allows that save to finish, while its late UI completion is ignored. This preserves the existing service contract.
 - The generated `main.js` was built successfully but remains ignored, consistent with the repository's existing artifact policy.
+
+## Review fix round 1
+
+Addressed both Important findings with tests written before the fix:
+
+1. Range text previously concatenated sibling rendered paragraphs and ignored BR elements. The selection model now walks `range.cloneContents()` through DOM node APIs, using selected text nodes verbatim with CRLF normalization, paragraph boundaries, other block boundaries, and explicit BR line breaks. It preserves inline formatting continuity and partial text endpoints. No HTML string parsing or innerHTML assumptions are used. Pending structural breaks avoid doubling newline formatting between block elements.
+2. Menu placement now intersects the reader rectangle with the viewport, insets all four sides by 8px, and subtracts the measured menu width/height before clamping. The menu has available-region max dimensions and overflow handling for narrow panes. It remains invisible until its measured coordinates are applied; a zero-size first measurement gets one cancellable animation-frame retry. Disposal/replacement retains the existing menu cleanup path and cancels pending positioning.
+
+RED evidence: `npm test -- tests/selection-model.test.ts tests/reader.test.ts --pool=threads --poolOptions.threads.singleThread`, start 16:09:52, reported 5 failing and 19 passing tests. Concrete failures included `firstsecond` instead of `first\n\nsecond`, `first boldsecondthird` instead of `first bold\nsecond\n\nthird`, pane-relative `[290,348]` instead of `[172,294]`, and initial visibility `""` instead of `"hidden"`. One additional geometry fixture initially provided less visible width than the measured menu plus inset; it was corrected from x=900 to x=850 so its expected fully visible position is physically possible. The other cases explicitly cover both lower and upper clamping and partial viewport intersection.
+
+GREEN evidence: focused selection/reader/dashboard integration/dashboard/main run, start 16:12:01, passed all 43 tests in 5 files; typecheck passed. Added tests use real DOM paragraph/BR nodes and hand-calculated reader/menu geometry, including a zero-size-to-measured transition with visibility assertions.
+
+Final round-1 verification: `npm test -- --pool=threads --poolOptions.threads.singleThread`, start 16:13:18, passed all 92 tests in 12 files. `npm run typecheck`, `npm run build`, and `git diff --check` passed. Self-review confirmed extraction uses only the selected fragment and positioning remains tied to the active reader/menu identity. Existing desktop acceptance and development-tool audit limitations remain unchanged.

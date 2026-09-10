@@ -39,4 +39,21 @@ describe("selectionFromRange", () => {
     range.selectNode(container);
     expect(selectionFromRange(range, container)).toBeNull();
   });
+  it("preserves paragraph boundaries between sibling paragraphs with inline formatting and partial endpoints", () => {
+    const { container, range } = fixture("");
+    const first = document.createElement("p"); first.textContent = "skip first";
+    const second = document.createElement("p");
+    const emphasis = document.createElement("em"); emphasis.textContent = "second";
+    second.append(emphasis, " tail"); container.replaceChildren(first, second);
+    range.setStart(first.firstChild!, 5); range.setEnd(second.lastChild!, 0);
+    expect(selectionFromRange(range, container)?.excerpt).toBe("first\n\nsecond");
+  });
+  it("preserves single and repeated BR boundaries without inserting breaks around inline elements", () => {
+    const { container, range } = fixture("");
+    const paragraph = document.createElement("p");
+    const strong = document.createElement("strong"); strong.textContent = "bold";
+    paragraph.append("first ", strong, document.createElement("br"), "second", document.createElement("br"), document.createElement("br"), "third");
+    container.replaceChildren(paragraph); range.selectNodeContents(paragraph);
+    expect(selectionFromRange(range, container)?.excerpt).toBe("first bold\nsecond\n\nthird");
+  });
 });
