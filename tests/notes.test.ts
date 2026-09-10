@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   appendNoteMarkdown,
@@ -40,6 +40,20 @@ describe("deer note titles and paths", () => {
       "小鹿笔记/收集/想法 (3).md"
     );
     expect(uniqueNotePath("deer", "Idea", ["deer/idea.md"])).toBe("deer/Idea (2).md");
+  });
+
+  it("uses deterministic ASCII case folding instead of the runtime locale", () => {
+    const localeLowerCase = vi.spyOn(String.prototype, "toLocaleLowerCase").mockImplementation(
+      function localeSensitiveLowerCase(this: string): string {
+        return this.replace(/I/g, "ı").toLowerCase();
+      }
+    );
+
+    try {
+      expect(uniqueNotePath("deer", "Idea", ["deer/idea.md"])).toBe("deer/Idea (2).md");
+    } finally {
+      localeLowerCase.mockRestore();
+    }
   });
 });
 
@@ -140,6 +154,15 @@ tags: ["思考"]
       excerpt: "",
       date: new Date("2026-09-11T09:00:00+08:00")
     })).toContain("个人判断 #思考  \n\n## 09:00:00");
+    const legacyNumericTag = original.replace(
+      'tags: ["思考"]',
+      'tags: ["思考", "2026", "复盘"]'
+    );
+    expect(parseDeerNote(appendNoteMarkdown(legacyNumericTag, {
+      body: "新条目 #新标签",
+      excerpt: "",
+      date: new Date("2026-09-11T10:00:00+08:00")
+    }))?.tags).toEqual(["思考", "复盘", "新标签"]);
     expect(() => appendNoteMarkdown("# 用户笔记", {
       body: "不应写入",
       excerpt: "",

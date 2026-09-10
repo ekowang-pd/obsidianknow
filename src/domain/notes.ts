@@ -64,13 +64,13 @@ export function uniqueNotePath(
   const normalizedTitle = noteTitle(title);
   const prefix = normalizedFolder ? `${normalizedFolder}/` : "";
   const used = new Set(
-    Array.from(existingPaths, (path) => path.replace(/\\/g, "/").toLocaleLowerCase())
+    Array.from(existingPaths, (path) => path.replace(/\\/g, "/").toLowerCase())
   );
 
   for (let number = 1; ; number += 1) {
     const suffix = number === 1 ? "" : ` (${number})`;
     const candidate = `${prefix}${normalizedTitle}${suffix}.md`;
-    if (!used.has(candidate.toLocaleLowerCase())) {
+    if (!used.has(candidate.toLowerCase())) {
       return candidate;
     }
   }
@@ -166,8 +166,8 @@ function extractTags(content: string): string[] {
   const tags: string[] = [];
 
   for (const match of withoutCode.matchAll(TAG_PATTERN)) {
-    const tag = match[1].replace(/[/-]+$/, "");
-    if (tag && /\p{L}/u.test(tag)) {
+    const tag = normalizedTag(match[1]);
+    if (tag) {
       tags.push(tag);
     }
   }
@@ -177,14 +177,24 @@ function extractTags(content: string): string[] {
 
 function distinctTags(tags: string[]): string[] {
   const seen = new Set<string>();
-  return tags.filter((tag) => {
-    const key = tag.toLocaleLowerCase();
+  return tags.flatMap((tag) => {
+    const normalized = normalizedTag(tag);
+    if (!normalized) {
+      return [];
+    }
+
+    const key = normalized.toLowerCase();
     if (seen.has(key)) {
-      return false;
+      return [];
     }
     seen.add(key);
-    return true;
+    return [normalized];
   });
+}
+
+function normalizedTag(tag: string): string | null {
+  const normalized = tag.replace(/[/-]+$/, "");
+  return normalized && /\p{L}/u.test(normalized) ? normalized : null;
 }
 
 function parsedString(value: string | undefined): string | null {

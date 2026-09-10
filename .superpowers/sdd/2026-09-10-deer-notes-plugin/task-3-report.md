@@ -132,3 +132,67 @@ Tests  22 passed (22)
 ## Concerns
 
 - Local-calendar calculations intentionally follow the JavaScript runtime's local timezone. This matches the product requirement and the configured desktop target; callers should supply ordinary local `Date` values rather than pre-sliced UTC dates.
+
+## Review fix round 1
+
+### Root cause
+
+- `appendNoteMarkdown` merged `parseDeerNote(existing).tags` directly into `distinctTags`. The parser accepts a JSON string-array by design, so historical numeric-only values bypassed the extractor's letter-containing rule.
+- The collision and tag deduplication keys used `toLocaleLowerCase()`, whose treatment of ASCII `I` can vary with the host locale.
+
+### RED
+
+Command:
+
+```text
+npm test -- tests/notes.test.ts
+```
+
+Observed failures before the correction:
+
+```text
+× deer note titles and paths > uses deterministic ASCII case folding instead of the runtime locale
+→ expected 'deer/Idea.md' to be 'deer/Idea (2).md'
+
+× deer note Markdown > appends a timestamped source excerpt while changing only updated and tags metadata
+→ expected [ '思考', '2026', '复盘', '新标签' ] to deeply equal [ '思考', '复盘', '新标签' ]
+
+Test Files  1 failed (1)
+Tests  2 failed | 9 passed (11)
+```
+
+The locale test uses a scoped spy that simulates Turkish-style lowercasing and restores it in `finally`; it does not change the process locale.
+
+### GREEN
+
+`normalizedTag` now applies the same trailing-delimiter and Unicode-letter rule to metadata tags before deduplication. All collision and deduplication keys use deterministic `toLowerCase()`.
+
+Command:
+
+```text
+npm test -- tests/notes.test.ts tests/contributions.test.ts --pool=threads --maxWorkers=1 --no-file-parallelism --reporter=verbose
+```
+
+Successful output:
+
+```text
+✓ tests/notes.test.ts (11 tests)
+✓ tests/contributions.test.ts (3 tests)
+Test Files  2 passed (2)
+Tests  14 passed (14)
+```
+
+Command:
+
+```text
+npm run typecheck
+```
+
+Successful output:
+
+```text
+> deer-notes@0.1.0 typecheck
+> tsc --noEmit
+```
+
+The default-worker form of the focused Vitest command intermittently remained at `RUN` without returning test output in this worktree. The single-worker invocation above completed successfully and is the same project-local workaround recorded for earlier task tests.
