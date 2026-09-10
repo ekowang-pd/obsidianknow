@@ -136,3 +136,61 @@ Successful output:
 ## Concerns
 
 - The focused lifecycle test uses Vitest single-worker flags because unconstrained worker startup intermittently exceeded the local command wait window. The task-required settings/navigation command completed normally without those flags.
+
+## Review fix 1: Windows drive-prefix paths
+
+### RED
+
+Command:
+
+```text
+npm test -- tests/settings.test.ts
+```
+
+Observed expected failure before the fix:
+
+```text
+× settings > rejects Windows drive paths after trailing slashes are normalized
+→ expected [Function] to throw an error
+
+FAIL  tests/settings.test.ts > settings > rejects Windows drive paths after trailing slashes are normalized
+AssertionError: expected [Function] to throw an error
+❯ tests/settings.test.ts:24:44
+expect(() => validateVaultPath("C:/")).toThrow("Vault 内的相对路径");
+Test Files  1 failed (1)
+Tests  1 failed | 4 passed (5)
+```
+
+The failure confirmed that trailing-slash normalization turned both `C:/` and `C:\` into bare `C:`, which the former `^[A-Za-z]:/` rule did not reject.
+
+### GREEN
+
+The drive-prefix check now uses `^[A-Za-z]:($|/)`, covering both bare and slash-terminated drive forms after normalization.
+
+Command:
+
+```text
+npm test -- tests/settings.test.ts tests/navigation.test.ts
+```
+
+Successful output:
+
+```text
+✓ tests/settings.test.ts (5 tests)
+✓ tests/navigation.test.ts (1 test)
+Test Files  2 passed (2)
+Tests  6 passed (6)
+```
+
+Command:
+
+```text
+npm run typecheck
+```
+
+Successful output:
+
+```text
+> deer-notes@0.1.0 typecheck
+> tsc --noEmit
+```

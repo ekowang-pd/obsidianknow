@@ -20,7 +20,7 @@ export function validateVaultPath(path: string): string {
   if (
     !normalized ||
     normalized.startsWith("/") ||
-    /^[A-Za-z]:\//.test(normalized) ||
+    /^[A-Za-z]:($|\/)/.test(normalized) ||
     normalized.split("/").some((segment) => !segment || segment === "." || segment === "..")
   ) {
     throw new Error(VAULT_PATH_ERROR);

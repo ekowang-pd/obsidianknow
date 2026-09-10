@@ -20,6 +20,11 @@ describe("settings", () => {
     expect(() => validateVaultPath("/绝对路径")).toThrow("Vault 内的相对路径");
   });
 
+  it("rejects Windows drive paths after trailing slashes are normalized", () => {
+    expect(() => validateVaultPath("C:/")).toThrow("Vault 内的相对路径");
+    expect(() => validateVaultPath("C:\\")).toThrow("Vault 内的相对路径");
+  });
+
   it("accepts a valid Vault-relative folder", () => {
     expect(validateVaultPath("80 笔记")).toBe("80 笔记");
   });
