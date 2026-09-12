@@ -215,7 +215,7 @@ export class DeerNotesView extends ItemView {
     this.sidebar.replaceChildren();
     const brand = this.element(this.sidebar, "div", "deer-brand");
     this.renderIcon(brand, "deer-brand");
-    this.element(brand, "h1", "", this.t("小鹿笔记"));
+    this.element(brand, "h1", "", "Deer");
     this.element(this.sidebar, "p", "deer-muted", this.t("捕捉灵感，让知识慢慢生长"));
     const nav = this.element(this.sidebar, "nav", "deer-navigation");
     const activity = this.element(this.sidebar, "section", "deer-activity");

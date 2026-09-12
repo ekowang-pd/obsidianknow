@@ -22,7 +22,7 @@ export function setFilledIcon(element: HTMLElement, name: string): void {
   if (!shapes.length) return;
   const document = element.ownerDocument;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", name === "deer-brand" ? "0 0 32 32" : "0 0 24 24");
+  svg.setAttribute("viewBox", name === "deer-brand" ? "8 8 50 48" : "0 0 24 24");
   svg.setAttribute("fill", "currentColor");
   svg.setAttribute("stroke", "none");
   svg.setAttribute("aria-hidden", "true");

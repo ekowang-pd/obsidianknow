@@ -254,3 +254,8 @@
 .deer-tag-picker input { width:100%; }
 .deer-tag-picker > div { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .deer-dashboard .deer-tag-picker button { padding:4px 8px; color:var(--text-accent); background:var(--background-modifier-hover); }
+
+/* Selected Deer wordmark: align the visible D silhouette with the lettering. */
+.deer-dashboard .deer-brand { gap:9px; }
+.deer-dashboard .deer-brand h1 { font-family:Arial,Helvetica,sans-serif; font-size:25px; font-weight:700; letter-spacing:-.7px; line-height:1; }
+.deer-dashboard .deer-brand > .deer-icon { width:23px; height:22px; color:#7350b5; }

@@ -4,9 +4,9 @@
 
 Deer Notes brings quick capture, a readable Markdown library, and source-linked excerpts into one Obsidian dashboard. Use it when you want to move from collecting passages to writing your own explanations, connections, and next steps. Your notes remain ordinary Markdown files in your vault.
 
-**Current release: 0.3.0.** Includes a visual Markdown composer, local image cards, tag selection, reflection prompts, and hide-and-explain. GitHub release availability and Obsidian community review are separate; check the community listing for review status.
+**Current release: 0.3.1.** Includes a visual Markdown composer, local image cards, tag selection, reflection prompts, and hide-and-explain. GitHub release availability and Obsidian community review are separate; check the community listing for review status.
 
-[Download 0.3.0](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.3.0) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
+[Download 0.3.1](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.3.1) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
 
 ## A simple reading-to-understanding workflow
 
