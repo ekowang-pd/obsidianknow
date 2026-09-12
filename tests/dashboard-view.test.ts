@@ -131,6 +131,12 @@ describe("DeerNotesView", () => {
     await flush();
     expect(ui.service.saveAttachment).toHaveBeenCalledWith(image);
     expect(ui.textarea().value).toContain("![图片](<附件/image.png>)");
+    expect(ui.textarea().hidden).toBe(true);
+    const savedDraft = ui.textarea().value;
+    ui.action("preview").click();
+    await flush();
+    expect(ui.textarea().hidden).toBe(false);
+    expect(ui.textarea().value).toBe(savedDraft);
     const render = vi.spyOn(MarkdownRenderer, "render");
     ui.action("preview").click();
     await flush();
@@ -203,6 +209,12 @@ describe("DeerNotesView", () => {
     ui.view.updateSettings({ ...DEFAULT_SETTINGS, notesFolder: "新笔记", attachmentsFolder: "新附件" }, ui.index as never, nextService as never);
     if (pending) { finishUpload("附件/image.png"); await flush(); }
     expect(ui.textarea().value).toBe("![图片](<附件/image.png>)");
+    expect(ui.textarea().hidden).toBe(true);
+    const savedDraft = ui.textarea().value;
+    ui.action("preview").click();
+    await flush();
+    expect(ui.textarea().hidden).toBe(false);
+    expect(ui.textarea().value).toBe(savedDraft);
     const render = vi.spyOn(MarkdownRenderer, "render");
     ui.action("preview").click();
     await flush();
@@ -269,4 +281,11 @@ describe("DeerNotesView", () => {
     expect(ui.action("notes").getAttribute("aria-current")).toBe("page");
     await ui.view.onClose();
   });
+});
+it('clears the search only after a successful save',async()=>{
+ const ui=setup();await ui.view.onOpen();
+ const search=ui.root.find(node=>node.className==='deer-search')[0];search.value='old query';search.dispatch('input');await flush();
+ ui.draft('New note');ui.service.saveQuickNote.mockRejectedValueOnce(new Error('disk'));
+ ui.action('save').click();await flush();expect(search.value).toBe('old query');
+ ui.action('save').click();await flush();expect(search.value).toBe('');await ui.view.onClose();
 });

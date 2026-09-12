@@ -40,7 +40,7 @@ const host = document.querySelector<HTMLElement>('#app')!;
 const view: DeerNotesView = new DeerNotesView({ app, contentEl: host } as never, index, notes, settings,
   path => view.openReader(path), async path => {
     const file = vault.getAbstractFileByPath(path); if (!file || !('content' in file)) throw new Error('文件不存在'); return file.content;
-  });
+  }, (path, source) => vault.resource(path, source));
 await view.onOpen();
 const language = document.querySelector<HTMLSelectElement>('#language')!;
 language.value = settings.language ?? 'zh-CN';

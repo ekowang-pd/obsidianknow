@@ -1,3 +1,5 @@
+import { RichComposer } from "./rich-composer";
+import { noteCover } from "./note-cover";
 import { translate } from "../i18n";
 import { Component, ItemView, MarkdownRenderer, Notice } from "obsidian";
 import { setFilledIcon } from "./icons";
@@ -33,6 +35,7 @@ export class DeerNotesView extends ItemView {
   private draft = "";
   private draftContext: DraftContext | null = null;
   private busy = false;
+  private rich?: RichComposer;
   private preview = false;
   private previewRevision = 0;
   private searchRevision = 0;
@@ -53,6 +56,7 @@ export class DeerNotesView extends ItemView {
   private search!: HTMLInputElement;
   private saveButton!: HTMLButtonElement;
   private previewButton!: HTMLButtonElement;
+  private editPreviewButton!: HTMLButtonElement;
   private saveLabel!: HTMLElement;
   private composerButtons: HTMLButtonElement[] = [];
 
@@ -62,7 +66,8 @@ export class DeerNotesView extends ItemView {
     private notes: NoteService,
     private settings: DeerNotesSettings,
     private readonly openFile: OpenDashboardFile,
-    private readonly readBody: ReadBody
+    private readonly readBody: ReadBody,
+    private readonly resolveCover?: (path: string, source: string) => string | undefined
   ) {
     super(leaf);
     this.snapshot = index.getSnapshot();
@@ -96,7 +101,7 @@ export class DeerNotesView extends ItemView {
       const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-action]");
       if (button && !button.disabled) void this.handleAction(button);
     });
-    this.listen(this.textarea, "input", () => { this.draft = this.textarea.value; this.updateComposer(); });
+    this.listen(this.textarea, "input", () => { this.draft = this.textarea.value; this.rich?.set(this.draft); this.updateComposer(); });
     this.listen(this.textarea, "keydown", event => {
       const key = event as KeyboardEvent;
       if (key.key === "Enter" && (key.ctrlKey || key.metaKey) && !key.isComposing) {
@@ -105,6 +110,21 @@ export class DeerNotesView extends ItemView {
     });
     this.listen(this.search, "input", () => { void this.refreshSearch(); });
     this.listen(this.imageInput, "change", () => { void this.attachImage(); });
+    if (this.contentEl.ownerDocument.defaultView) {
+      this.rich = new RichComposer(this.composer, {
+        value: this.draft, label: this.t("快速笔记"), placeholder: this.t("此刻有什么想法？"),
+        changed: body => { this.draft = body; this.textarea.value = body; this.updateComposer(); },
+        save: () => { void this.saveDraft(); }, upload: file => { void this.attachImage(file); },
+        resolve: path => {
+          const source = `${this.draftContext?.notesFolder ?? this.settings.notesFolder}/未保存.md`;
+          if (this.resolveCover) return this.resolveCover(path, source);
+          const file = this.app.metadataCache?.getFirstLinkpathDest(path, source);
+          return file ? this.app.vault.getResourcePath(file) : undefined;
+        },
+      });
+      this.composer.insertBefore(this.rich.host, this.previewEl);
+      this.updateComposer();
+    }
     this.bindIndex();
     this.renderSidebar();
     await this.index.initialize();
@@ -113,6 +133,8 @@ export class DeerNotesView extends ItemView {
 
   async onClose(): Promise<void> {
     this.closed = true;
+    this.rich?.destroy();
+    this.rich = undefined;
     this.summaryRevision += 1;
     this.summaryCache.clear();
     this.reader?.dispose();
@@ -249,6 +271,9 @@ export class DeerNotesView extends ItemView {
       this.composerButtons.push(button);
       if (action === "preview") this.previewButton = button;
     }
+    this.editPreviewButton = this.button(toolbar, this.t("继续编辑"), "", "preview");
+    this.editPreviewButton.className = "deer-edit-preview";
+    this.composerButtons.push(this.editPreviewButton);
     this.saveButton = this.button(toolbar, this.t("保存笔记"), "plus", "save");
     this.saveButton.className = "deer-save mod-cta";
     this.saveLabel = this.saveButton.lastElementChild as HTMLElement;
@@ -286,7 +311,7 @@ export class DeerNotesView extends ItemView {
     const excerpts: { path: string; mtime: number; title: string; tags: readonly string[]; element: HTMLElement; more: HTMLElement }[] = [];
     for (const file of files) {
       const row = this.element(list, "li", "deer-note-row");
-      const title = "title" in file ? file.title : file.basename;
+      const title = file.basename;
       const button = this.element(row, "button", "deer-note-link");
       button.type = "button";
       button.dataset.action = "open-file";
@@ -295,8 +320,12 @@ export class DeerNotesView extends ItemView {
       button.title = file.path;
       const date = new Date(file.mtime);
       const modified = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const heading = this.element(button, "span", "deer-note-heading");
+      const icon = this.element(heading, "span", "deer-icon");
+      icon.setAttribute("aria-hidden", "true");
+      setFilledIcon(icon, "notebook");
+      this.element(heading, "span", "deer-note-title", title);
       this.element(button, "span", "deer-note-date", modified);
-      this.element(button, "span", "deer-note-title", title);
       const excerpt = this.element(button, "span", "deer-note-summary");
       const meta = this.element(button, "span", "deer-note-meta");
       if ("source" in file) {
@@ -326,6 +355,21 @@ export class DeerNotesView extends ItemView {
         try {
           const body = await cached.body;
           if (!this.closed && summaryRevision === this.summaryRevision) {
+            const cover = noteCover(body);
+            if (cover) {
+              try {
+                const file = this.app.metadataCache?.getFirstLinkpathDest(cover.path, item.path);
+                const url = this.resolveCover ? this.resolveCover(cover.path, item.path) : file ? this.app.vault.getResourcePath(file) : undefined;
+                if (url) {
+                  const image = item.element.ownerDocument.createElement("img");
+                  image.className = "deer-note-cover"; image.alt = cover.alt;
+                  image.loading = "lazy"; image.decoding = "async";
+                  image.addEventListener("error", () => image.remove(), { once: true });
+                  image.src = url;
+                  item.element.parentElement?.insertBefore(image, item.element);
+                }
+              } catch { /* A missing attachment must not hide the note text. */ }
+            }
             const summary = noteSummary(body, item.title, item.tags);
             item.element.textContent = summary;
             item.element.hidden = !summary;
@@ -376,11 +420,13 @@ export class DeerNotesView extends ItemView {
       catch (error) { if (!this.closed) new Notice(this.t("无法打开笔记：{0}", errorMessage(error))); }
     } else if (action === "save") await this.saveDraft();
     else if (action === "image") this.imageInput.click();
+    else if (this.rich && ["bold", "unordered", "ordered"].includes(action!)) { this.preview = false; this.updateComposer(); this.rich.action(action!); }
+    else if (this.rich && action === "tag") this.rich.pickTag(this.index.getSnapshot().deerNotes.flatMap(note => [...note.tags]), this.t("输入或选择标签"));
     else if (action === "preview") {
       this.preview = !this.preview;
       this.updateComposer();
       if (this.preview) await this.renderPreview();
-      else { this.previewRevision += 1; this.clearPreview(); }
+      else { this.previewRevision += 1; this.clearPreview(); if (this.rich) this.rich.focus(); else this.textarea.focus(); }
     } else if (action === "bold") this.insertText("**", "**", this.t("文字"));
     else if (action === "tag") this.insertText(" #", "", this.t("标签"));
     else if (action === "unordered" || action === "ordered") this.insertList(action === "ordered");
@@ -422,6 +468,9 @@ export class DeerNotesView extends ItemView {
       this.draftContext = null;
       if (!this.closed) {
         this.textarea.value = "";
+        this.rich?.reset();
+        this.search.value = "";
+        await this.refreshSearch();
         this.preview = false;
         this.previewRevision += 1;
         this.clearPreview();
@@ -431,8 +480,8 @@ export class DeerNotesView extends ItemView {
     finally { this.busy = false; if (!this.closed) this.updateComposer(); }
   }
 
-  private async attachImage(): Promise<void> {
-    const file = this.imageInput.files?.[0];
+  private async attachImage(supplied?: File): Promise<void> {
+    const file = supplied ?? this.imageInput.files?.[0];
     if (!file || this.busy) return;
     this.busy = true;
     this.showError("");
@@ -443,7 +492,15 @@ export class DeerNotesView extends ItemView {
       // Keep the completed upload's Vault path tied to the captured draft context.
       const vaultPath = `${context.notesFolder}/${relativePath}`;
       context.attachmentPaths.add(vaultPath);
-      if (!this.closed) this.replaceSelection(`![图片](<${relativePath.replace(/[<>%\r\n]/g, encodeURIComponent)}>)`);
+      if (!this.closed && this.rich) {
+        this.preview = false;
+        this.rich.image(relativePath);
+      } else if (!this.closed) {
+        this.replaceSelection(`![图片](<${relativePath.replace(/[<>%\r\n]/g, encodeURIComponent)}>)`);
+        this.preview = true;
+        this.updateComposer();
+        await this.renderPreview();
+      }
     } catch (error) { if (!this.closed) this.showError(this.t("图片保存失败：{0}", errorMessage(error))); }
     finally {
       this.busy = false;
@@ -479,8 +536,11 @@ export class DeerNotesView extends ItemView {
     if (this.draft || this.busy) this.getDraftContext();
     else this.draftContext = null;
     this.textarea.disabled = this.busy;
-    this.textarea.hidden = this.preview;
+    this.textarea.hidden = !!this.rich || this.preview;
+    this.rich?.state(this.busy, this.preview, this.t("快速笔记"), this.t("此刻有什么想法？"));
     this.previewEl.hidden = !this.preview;
+    this.editPreviewButton.hidden = !this.preview;
+    this.editPreviewButton.textContent = this.t("继续编辑");
     for (const button of this.composerButtons) button.disabled = this.busy;
     this.saveButton.disabled = this.busy || !this.draft.trim();
     if (this.saveLabel) this.saveLabel.textContent = this.busy ? this.t("保存中…") : this.t("保存笔记");

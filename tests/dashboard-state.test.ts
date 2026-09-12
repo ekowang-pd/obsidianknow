@@ -119,3 +119,8 @@ it("searches existing vault content and excludes hidden folders from results and
  await state.setSearchQuery("missing");
  expect(state.visibleFiles).toEqual([]);
 });
+it('continues body search after one unreadable file',async()=>{
+ const broken=file('broken.md'),good=file('good.md');
+ const state=new DashboardState({rootFolders:[],markdownFiles:[broken,good],deerNotes:[]},DEFAULT_SETTINGS,async path=>{if(path==='broken.md')throw new Error('gone');return 'unique-search-term';});
+ await state.setSearchQuery('unique-search-term');expect(state.visibleFiles).toEqual([good]);
+});

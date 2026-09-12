@@ -62,13 +62,20 @@ export class DashboardState {
     const normalized = query.trim().toLocaleLowerCase();
     if (!normalized || !this.readBody) return;
     const matches = new Set<string>();
+    let readSucceeded = false;
+    let readError: unknown;
     for (const file of this.candidates()) {
       if (this.matchesMetadata(file, normalized)) continue;
-      const body = await this.readBody(file.path);
+      let body: string;
+      try { body = await this.readBody(file.path); readSucceeded = true; }
+      catch (error) { readError = error; if (revision !== this.revision) return; continue; }
       if (revision !== this.revision) return;
       if (body.toLocaleLowerCase().includes(normalized)) matches.add(file.path);
     }
-    if (revision === this.revision) this.bodyMatches = matches;
+    if (revision === this.revision) {
+      this.bodyMatches = matches;
+      if (readError && !readSucceeded) throw readError;
+    }
   }
 
   private candidates(): DashboardFile[] {

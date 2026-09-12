@@ -1,4 +1,4 @@
-.deer-dashboard { position:relative; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0; padding:0; color:var(--text-normal); background:color-mix(in srgb,var(--text-normal) 4%,var(--background-primary)); font:14px/1.6 var(--font-interface); overflow:auto; container-type:inline-size; --deer-border:var(--background-modifier-border); }
+.deer-dashboard { position:relative; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0; padding:0; color:var(--text-normal); background:var(--background-primary); font:14px/1.6 var(--font-interface); overflow:auto; container-type:inline-size; --deer-border:var(--background-modifier-border); }
 .deer-dashboard *, .deer-dashboard *::before, .deer-dashboard *::after { box-sizing:border-box; }
 .deer-dashboard { scrollbar-gutter:stable; }
 .deer-dashboard [hidden] { display:none!important; }
@@ -189,3 +189,68 @@
 .deer-dashboard .deer-excerpt-toggle { display:block; margin:0 0 16px; min-height:36px; padding:4px 0; background:transparent; color:var(--text-accent); font-size:12px; text-align:left; white-space:normal; }
 
 .deer-reader.deer-recalling>.deer-reader-content { visibility:hidden; }
+
+/* Give surfaces their own contrast even when an Obsidian theme uses a white view background. */
+.view-content.deer-dashboard {
+ --deer-card-surface:#f5f4f8;
+ --deer-card-edge:#e8e6ee;
+ --deer-card-hover:#efedf5;
+ background-color:var(--background-primary);
+}
+.theme-dark .view-content.deer-dashboard {
+ --deer-card-surface:#29282e;
+ --deer-card-edge:#3a3842;
+ --deer-card-hover:#33313b;
+}
+@supports (background:color-mix(in srgb,white,black)) {
+ .view-content.deer-dashboard {
+  --deer-card-surface:color-mix(in srgb,var(--text-normal) 5%,var(--background-primary));
+  --deer-card-edge:color-mix(in srgb,var(--text-normal) 11%,var(--background-primary));
+  --deer-card-hover:color-mix(in srgb,var(--text-normal) 8%,var(--background-primary));
+ }
+}
+.view-content.deer-dashboard .deer-note-list .deer-note-link {
+ background:var(--deer-card-surface);
+ border:1px solid var(--deer-card-edge);
+ box-shadow:none;
+}
+.view-content.deer-dashboard .deer-note-list .deer-note-link:hover {
+ background:var(--deer-card-hover);
+ border-color:var(--deer-card-edge);
+ box-shadow:none;
+}
+.view-content.deer-dashboard .deer-composer {
+ background:var(--deer-card-surface);
+ border-color:var(--deer-card-edge);
+ box-shadow:none;
+}
+.view-content.deer-dashboard .deer-composer:focus-within { border-color:var(--interactive-accent); }
+
+.deer-dashboard .deer-note-cover { display:block; width:100%; height:clamp(180px,25cqi,300px); object-fit:cover; border-radius:8px; background:var(--background-primary); }
+.deer-dashboard .deer-note-title { font-size:17px; font-weight:600; line-height:1.55; }
+.deer-dashboard .deer-note-summary { white-space:normal; -webkit-line-clamp:3; max-height:5.4em; color:var(--text-muted); }
+.deer-dashboard .deer-note-meta { font-size:11px; }
+.deer-dashboard .deer-note-path { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* File identity comes first, matching the vault's file names. */
+.deer-dashboard .deer-note-heading { display:flex; align-items:flex-start; gap:9px; min-width:0; }
+.deer-dashboard .deer-note-heading > .deer-icon { margin-top:4px; width:16px; height:16px; color:var(--text-muted); }
+.deer-dashboard .deer-note-heading > .deer-note-title { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.deer-dashboard .deer-note-heading + .deer-note-date { margin-top:-6px; }
+.deer-dashboard .deer-edit-preview { padding:6px 10px; color:var(--text-accent); background:transparent; font-size:13px; }
+.deer-dashboard .deer-composer .deer-preview img { display:block; max-height:320px; width:auto; max-width:100%; object-fit:contain; border-radius:8px; }
+
+.deer-rich-composer .tiptap { min-height:108px; max-height:420px; overflow-y:auto; padding:0 2px; outline:none; font:14px/1.8 var(--font-text); white-space:pre-wrap; overflow-wrap:anywhere; }
+.deer-rich-composer .tiptap > :first-child { margin-top:0; }
+.deer-rich-composer .tiptap p { margin:8px 0; }
+.deer-rich-composer .tiptap:has(> p:only-child > br:only-child)::before { content:attr(data-placeholder); position:absolute; color:var(--text-muted); pointer-events:none; }
+.deer-rich-composer .tiptap img { display:block; max-width:100%; max-height:280px; object-fit:contain; border-radius:8px; }
+.deer-rich-image { display:block; margin:12px 0; }
+.deer-rich-composer .ProseMirror-selectednode { outline:2px solid var(--interactive-accent); outline-offset:3px; }
+.deer-rich-composer .tiptap :is(ul,ol) { padding-left:24px; }
+.deer-rich-composer .tiptap blockquote { margin:8px 0; padding-left:12px; border-left:3px solid var(--interactive-accent); color:var(--text-muted); }
+.deer-rich-composer .tiptap pre { padding:12px; background:var(--background-secondary); overflow:auto; }
+.deer-tag-picker { margin-top:12px; padding:12px; border:1px solid var(--background-modifier-border); border-radius:8px; }
+.deer-tag-picker input { width:100%; }
+.deer-tag-picker > div { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.deer-dashboard .deer-tag-picker button { padding:4px 8px; color:var(--text-accent); background:var(--background-modifier-hover); }

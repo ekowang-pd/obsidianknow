@@ -86,3 +86,13 @@ User feedback: replace pointed stag with a friendlier rounded fawn; match the wo
 - All notes now includes existing vault Markdown. Folder search remains scoped; dot paths and configured hidden folders are excluded. Existing notes are not modified.
 - Validation: 143 tests passed; plugin and preview type checks/builds and release asset check passed. Browser search for a body-only term found the existing reading article. Screenshot reviewed for aligned navigation and visible activity/cards. Native Obsidian theme verification remains manual.
 - Current changes are a local preview, not a new released version.
+
+
+### Native white-canvas follow-up
+User screenshot confirms the prior canvas-only tint is insufficient in native Obsidian. Give list cards and composer their own 5% theme-adaptive surface tint plus 11% edge, on the native primary canvas; increase scoped selector specificity and provide light/dark fallback colors. Hover strengthens fill without adding movement or shadow. Native theme acceptance remains pending.
+
+### Markdown list image previews (2026-09-12)
+- Local Markdown images and Obsidian image embeds become a lazy-loaded first-image cover. Only raster vault attachments are resolved through Obsidian's metadata cache and resource API; remote images are not requested from the list.
+- Missing or failed covers fall back to the existing text card. Cover clicks open the original note. Covers use a bounded, cropped height; the reader retains the full content.
+- Titles have stronger hierarchy, excerpts use three lines, and long folder paths are truncated with the existing complete-path tooltip.
+- Verified: browser upload/save/render with a local demo image; 150 tests including native resource resolution and image-error fallback. Native Obsidian theme acceptance remains pending.

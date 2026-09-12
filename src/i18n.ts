@@ -33,6 +33,8 @@ const english: Record<string, string> = {
   "无序列表": "Bullet list",
   "有序列表": "Numbered list",
   "Markdown 预览": "Markdown preview",
+  "继续编辑": "Continue editing",
+  "输入或选择标签": "Type or choose a tag",
   "保存笔记": "Save note",
   "保存笔记（Ctrl / ⌘ + Enter）": "Save note (Ctrl / ⌘ + Enter)",
   "没有匹配的笔记，试试其他关键词。": "No matching notes. Try another search.",
