@@ -3,6 +3,12 @@ import { Notice } from "obsidian";
 import type { NoteService } from "../services/note-service";
 import type { SelectionAnchor } from "./selection-model";
 
+const reflectionPrompts = [
+  { label: "我的理解", question: "如果讲给不了解它的人，我会怎么解释？" },
+  { label: "已有联系", question: "它与哪条笔记、哪段经历有关？也可以写下反例。" },
+  { label: "尝试应用", question: "我能在什么具体问题上试一次？怎样观察结果？" }
+] as const;
+
 export class SelectionNoteController {
   private root: HTMLElement | null = null;
   private cleanups: (() => void)[] = [];
@@ -31,10 +37,48 @@ export class SelectionNoteController {
     this.element(root, "p", "deer-excerpt-source", this.t("来自 {0}", filePath.split("/").pop()?.replace(/\.md$/i, "")));
     const excerpt = this.element(root, "blockquote", "deer-excerpt", anchor.excerpt);
     excerpt.setAttribute("aria-label", this.t("原文摘录（只读）"));
+    const toggleExcerpt = this.element(root, "button", "deer-excerpt-toggle", this.t("隐藏原文，试着复述"));
+    toggleExcerpt.type = "button";
+    toggleExcerpt.setAttribute("aria-expanded", "true");
+    this.listen(toggleExcerpt, "click", () => {
+      excerpt.hidden = !excerpt.hidden;
+      this.host.classList.toggle("deer-recalling", excerpt.hidden);
+      toggleExcerpt.setAttribute("aria-expanded", String(!excerpt.hidden));
+      toggleExcerpt.textContent = this.t(excerpt.hidden ? "显示原文，核对理解" : "隐藏原文，试着复述");
+    });
     const label = this.element(root, "label", "", this.t("笔记（Markdown）"));
     const input = this.element(label, "textarea", "deer-excerpt-input");
     input.rows = 6;
     input.placeholder = this.t("写下你的理解，或一个新的想法…");
+    const prompts = this.element(root, "div", "deer-reflection-prompts");
+    prompts.setAttribute("role", "group");
+    prompts.setAttribute("aria-label", this.t("思考提示（可选）"));
+    const hint = this.element(root, "p", "deer-reflection-hint", this.t("选一个角度开始，也可以自由记录。"));
+    hint.setAttribute("aria-live", "polite");
+    const promptButtons = reflectionPrompts.map((prompt, index) => {
+      const button = this.element(prompts, "button", "", this.t(prompt.label));
+      button.type = "button"; button.dataset.prompt = String(index);
+      this.listen(button, "click", () => {
+        if (this.saving) return;
+        const heading = "### " + this.t(prompt.label);
+        const alternatives = ["### " + prompt.label, "### " + translate("en", prompt.label)];
+        const lines = input.value.split("\n");
+        const existing = lines.findIndex(line => alternatives.includes(line.trim()));
+        let caret: number;
+        if (existing < 0) {
+          input.value += (input.value ? "\n\n" : "") + heading + "\n";
+          caret = input.value.length;
+        } else {
+          caret = lines.slice(0, existing + 1).join("\n").length;
+          if (caret === input.value.length) input.value += "\n";
+          caret += 1;
+        }
+        hint.dataset.prompt = String(index);
+        hint.textContent = this.t(prompt.question);
+        input.focus(); input.setSelectionRange(caret, caret);
+      });
+      return button;
+    });
     const error = this.element(root, "p", "deer-error");
     error.hidden = true;
     error.setAttribute("role", "alert");
@@ -48,6 +92,8 @@ export class SelectionNoteController {
     this.listen(cancel, "click", () => this.close());
     this.listen(save, "click", () => {
       if (this.saving) return;
+      promptButtons.forEach(button => { button.disabled = true; });
+      toggleExcerpt.disabled = true;
       this.saving = true; save.disabled = true; input.disabled = true; cancel.disabled = true; error.hidden = true;
       root.setAttribute("aria-busy", "true");
       status.textContent = this.t("正在保存，请稍候…"); status.hidden = false;
@@ -65,13 +111,19 @@ export class SelectionNoteController {
         })
         .finally(() => {
           if (revision !== this.revision || this.disposed) return;
+          promptButtons.forEach(button => { button.disabled = false; });
+          toggleExcerpt.disabled = false;
           this.saving = false; save.disabled = false; input.disabled = false; cancel.disabled = false;
           root.setAttribute("aria-busy", "false"); status.hidden = true; input.focus();
         });
     });
     this.listen(root, "keydown", event => {
-      if ((event as KeyboardEvent).key !== "Tab") return;
-      const items = [input, cancel, save].filter(item => !item.disabled);
+      const key = event as KeyboardEvent;
+      if (key.key === "Enter" && (key.ctrlKey || key.metaKey) && !key.isComposing) {
+        event.preventDefault(); event.stopPropagation(); save.click(); return;
+      }
+      if (key.key !== "Tab") return;
+      const items = (this.saving ? [] : [toggleExcerpt, input, ...promptButtons, cancel, save]).filter(item => !item.disabled);
       if (!items.length) { event.preventDefault(); root.focus(); return; }
       const current = root.ownerDocument.activeElement;
       const backwards = (event as KeyboardEvent).shiftKey;
@@ -88,7 +140,7 @@ export class SelectionNoteController {
     const wasOpen = this.root !== null;
     this.cleanups.splice(0).forEach(cleanup => cleanup());
     this.root?.remove(); this.root = null;
-    this.host.classList.remove("deer-excerpt-open");
+    this.host.classList.remove("deer-excerpt-open", "deer-recalling");
     this.saving = false;
     if (wasOpen) this.restoreFocus();
   }
@@ -98,9 +150,17 @@ export class SelectionNoteController {
     this.root.setAttribute("aria-label", this.t("摘录笔记"));
     const heading = this.root.querySelector("h2"); if (heading) heading.textContent = this.t("摘录笔记");
     this.root.querySelector("blockquote")?.setAttribute("aria-label", this.t("原文摘录（只读）"));
+    const toggle = this.root.querySelector<HTMLButtonElement>(".deer-excerpt-toggle");
+    if (toggle) toggle.textContent = this.t(this.root.querySelector("blockquote")?.hidden ? "显示原文，核对理解" : "隐藏原文，试着复述");
     const label = this.root.querySelector("label");
     if (label?.firstChild?.nodeType === 3) label.firstChild.textContent = this.t("笔记（Markdown）");
     const input = this.root.querySelector("textarea"); if (input) input.placeholder = this.t("写下你的理解，或一个新的想法…");
+    this.root.querySelector(".deer-reflection-prompts")?.setAttribute("aria-label", this.t("思考提示（可选）"));
+    this.root.querySelectorAll<HTMLButtonElement>("button[data-prompt]").forEach(button => {
+      button.textContent = this.t(reflectionPrompts[Number(button.dataset.prompt)].label);
+    });
+    const hint = this.root.querySelector<HTMLElement>(".deer-reflection-hint");
+    if (hint) hint.textContent = this.t(hint.dataset.prompt === undefined ? "选一个角度开始，也可以自由记录。" : reflectionPrompts[Number(hint.dataset.prompt)].question);
     const buttons = this.root.querySelectorAll(".deer-excerpt-actions button");
     if (buttons[0]) buttons[0].textContent = this.t("取消");
     if (buttons[1]) buttons[1].textContent = this.t("保存笔记");

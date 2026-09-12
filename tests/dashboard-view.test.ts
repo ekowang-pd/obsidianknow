@@ -49,7 +49,7 @@ describe("DeerNotesView", () => {
     await ui.view.onOpen();
     const cell = (date: string) => ui.root.find(node => node.className === "deer-heat-cell" && node.title.startsWith(date))[0];
     expect(cell("2026-09-09").dataset.level).toBe("1");
-    expect(ui.root.find(node => node.textContent === "最近修改活动")).toHaveLength(1);
+    expect(ui.root.find(node => node.className === "deer-activity" && node.tagName === "section")).toHaveLength(1);
     const changed = { ...note, mtime: new Date(2026, 8, 10, 10).getTime() };
     ui.publish({ ...empty, deerNotes: [changed], markdownFiles: [changed] });
     await flush();

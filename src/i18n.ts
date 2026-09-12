@@ -1,5 +1,15 @@
 export type Language = 'zh-CN' | 'en';
 const english: Record<string, string> = {
+  "隐藏原文，试着复述": "Hide excerpt and explain it yourself",
+  "显示原文，核对理解": "Show excerpt and check your understanding",
+  "思考提示（可选）": "Reflection prompts (optional)",
+  "我的理解": "My understanding",
+  "已有联系": "Connections",
+  "尝试应用": "Try it out",
+  "如果讲给不了解它的人，我会怎么解释？": "How would I explain this to someone new to the topic?",
+  "它与哪条笔记、哪段经历有关？也可以写下反例。": "Which note or experience does this connect to? Consider a counterexample too.",
+  "我能在什么具体问题上试一次？怎样观察结果？": "What specific problem could I try this on? How will I observe the result?",
+  "选一个角度开始，也可以自由记录。": "Choose a starting point, or write freely.",
   "小鹿笔记": "Deer Notes",
   "全部笔记": "All notes",
   "知识概览": "Knowledge overview",

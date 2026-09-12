@@ -74,10 +74,11 @@ export class DashboardState {
   private candidates(): DashboardFile[] {
     const selected = this.selectedView;
     if (selected.kind === "overview") return [];
-    if (selected.kind === "notes") return [...this.snapshot.deerNotes];
     const notes = new Map(this.snapshot.deerNotes.map(note => [note.path, note]));
     return this.snapshot.markdownFiles
-      .filter(file => file.path.startsWith(`${selected.path}/`))
+      .filter(file => !file.path.split("/").some(part => part.startsWith(".")))
+      .filter(file => !this.settings.hiddenRootFolders.some(folder => file.path.startsWith(`${folder}/`)))
+      .filter(file => selected.kind === "notes" || file.path.startsWith(`${selected.path}/`))
       .map(file => notes.get(file.path) ?? file);
   }
 

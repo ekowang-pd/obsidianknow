@@ -20,17 +20,17 @@ describe("DashboardState", () => {
     const tagged = { ...note, path: "小鹿笔记/new.md", mtime: 3000, tags: ["阅读"] };
     const notes = Object.freeze([note, tagged]);
     const read = vi.fn(async () => "unrelated");
-    const state = new DashboardState({ ...snapshot, deerNotes: notes }, DEFAULT_SETTINGS, read);
+    const state = new DashboardState({ ...snapshot, markdownFiles: notes, deerNotes: notes }, DEFAULT_SETTINGS, read);
     expect(state.visibleFiles.map(file => file.path)).toEqual([tagged.path, note.path]);
     expect(notes[0]).toBe(note);
     await state.setSearchQuery("#阅读");
     expect(state.visibleFiles).toEqual([tagged]);
     expect(read).not.toHaveBeenCalledWith(tagged.path);
   });
-  it("orders fixed and visible root navigation and shows only deer-notes initially", () => {
+  it("orders fixed and visible root navigation and shows all Markdown initially", () => {
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS);
     expect(state.navigation.map(item => item.id)).toEqual(["all-notes", "01 收件箱", "10 项目", "overview"]);
-    expect(state.visibleFiles.map(item => item.path)).toEqual(["小鹿笔记/Alpha.md"]);
+    expect(state.visibleFiles).toEqual(snapshot.markdownFiles);
   });
 
   it("filters folders recursively without matching sibling prefixes", () => {
@@ -41,7 +41,7 @@ describe("DashboardState", () => {
     expect(state.selectedView).toEqual({ kind: "overview" });
     expect(state.visibleFiles).toEqual([]);
     state.selectNotes();
-    expect(state.visibleFiles).toEqual([note]);
+    expect(state.visibleFiles).toEqual(snapshot.markdownFiles);
   });
 
   it("falls back when a selected folder disappears or is hidden by new settings", () => {
@@ -60,11 +60,11 @@ describe("DashboardState", () => {
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS, read);
     await state.setSearchQuery(query);
     expect(state.visibleFiles).toEqual([note]);
-    expect(read).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalledWith(note.path);
   });
 
   it("reads bodies lazily by path and searches case-insensitively", async () => {
-    const read = vi.fn(async () => "A HIDDEN thought");
+    const read = vi.fn(async (path: string) => path === note.path ? "A HIDDEN thought" : "unrelated");
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS, read);
     expect(read).not.toHaveBeenCalled();
     await state.setSearchQuery("hidden");
@@ -76,7 +76,7 @@ describe("DashboardState", () => {
 
   it("does not let a delayed search overwrite a newer query or selection", async () => {
     let resolve!: (text: string) => void;
-    const state = new DashboardState(snapshot, DEFAULT_SETTINGS, () => new Promise(done => { resolve = done; }));
+    const state = new DashboardState({ ...snapshot, markdownFiles: [note] }, DEFAULT_SETTINGS, () => new Promise(done => { resolve = done; }));
     const pending = state.setSearchQuery("old");
     await state.setSearchQuery("ALPHA");
     resolve("old");
@@ -106,4 +106,16 @@ describe("DashboardState", () => {
     await state.setSearchQuery("");
     expect(state.visibleFiles.map(file => file.path)).toEqual(["01 收件箱/a.md", "01 收件箱/子目录/b.md"]);
   });
+});
+
+it("searches existing vault content and excludes hidden folders from results and reads", async () => {
+ const files = [file("Knowledge/existing.md"), file("Hidden/secret.md"), file(".private/private.md"), file("root.md")];
+ const read = vi.fn(async (_path: string) => "#research useful body");
+ const state = new DashboardState({ rootFolders: [], markdownFiles: files, deerNotes: [] }, {...DEFAULT_SETTINGS, hiddenRootFolders: ["Hidden"]}, read);
+ expect(state.visibleFiles.map(f => f.path)).toEqual(["Knowledge/existing.md", "root.md"]);
+ await state.setSearchQuery("#research");
+ expect(state.visibleFiles).toHaveLength(2);
+ expect(read.mock.calls.map(call => call[0])).toEqual(["Knowledge/existing.md", "root.md"]);
+ await state.setSearchQuery("missing");
+ expect(state.visibleFiles).toEqual([]);
 });

@@ -36,6 +36,49 @@ function setup() {
 }
 
 describe("ReaderController", () => {
+  it("hides the source without changing the saved excerpt and supports shortcut save outside IME composition", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    const input = ui.host.querySelector("textarea")!; input.value = "My own explanation";
+    ui.button("隐藏原文，试着复述").click();
+    expect(ui.host.querySelector<HTMLElement>("blockquote")!.hidden).toBe(true);
+    expect(ui.host.querySelector(".deer-reader")!.classList.contains("deer-recalling")).toBe(true);
+    input.dispatchEvent(new KeyboardEvent("keydown", {key:"Enter",ctrlKey:true,isComposing:true,bubbles:true}));
+    expect(ui.notes.saveExcerptNote).not.toHaveBeenCalled();
+    input.dispatchEvent(new KeyboardEvent("keydown", {key:"Enter",ctrlKey:true,bubbles:true}));
+    await flush();
+    expect(ui.host.querySelector(".deer-reader")!.classList.contains("deer-recalling")).toBe(false);
+    expect(ui.notes.saveExcerptNote).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({excerpt:"first\n\nsecond",body:"My own explanation"}));
+  });
+  it("returns the caret to the selected reflection section rather than the end of a different section", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    const input = ui.host.querySelector("textarea")!;
+    input.value = "### My understanding\nExisting words\n\n### 尝试应用\nAn action";
+    ui.button("我的理解").click();
+    expect(input.value).not.toContain("### 我的理解");
+    expect(input.selectionStart).toBe("### My understanding\n".length);
+  });
+  it("adds optional reflection headings without replacing a draft or duplicating a heading", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();
+    const input = ui.host.querySelector("textarea")!; input.value = "My existing thought";
+    ui.button("我的理解").click(); ui.button("我的理解").click();
+    expect(input.value).toBe("My existing thought\n\n### 我的理解\n");
+    expect(ui.host.querySelector(".deer-reflection-hint")?.textContent).toContain("怎么解释");
+    expect(document.activeElement).toBe(input);
+    input.value += "An explanation in my words";
+    ui.button("尝试应用").click();
+    expect(input.value).toContain("An explanation in my words\n\n### 尝试应用");
+    ui.notes.saveExcerptNote.mockRejectedValueOnce(new Error("disk full"));
+    ui.button("保存笔记").click();
+    expect(ui.button("已有联系").disabled).toBe(true);
+    await flush();
+    expect(ui.button("已有联系").disabled).toBe(false);
+    expect(input.value).toContain("My existing thought");
+    ui.button("保存笔记").click(); await flush();
+    expect(ui.notes.saveExcerptNote).toHaveBeenLastCalledWith(expect.objectContaining({body: input.value, excerpt: "first\n\nsecond"}));
+  });
   it.each([true, false])("styles timestamp headings only in owned notes (owned: %s)", async owned => {
     const ui = setup();
     ui.app.vault.cachedRead.mockResolvedValue(owned ? '---\ntype: deer-note\ncreated: "2026-09-10"\nupdated: "2026-09-10"\n---\n\n# Title' : '# Title');

@@ -1,4 +1,4 @@
-.deer-dashboard { position:relative; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0; padding:0; color:var(--text-normal); background:var(--background-secondary); font:14px/1.6 var(--font-interface); overflow:auto; container-type:inline-size; --deer-border:var(--background-modifier-border); }
+.deer-dashboard { position:relative; display:flex; flex-wrap:wrap; align-content:flex-start; gap:0; padding:0; color:var(--text-normal); background:color-mix(in srgb,var(--text-normal) 4%,var(--background-primary)); font:14px/1.6 var(--font-interface); overflow:auto; container-type:inline-size; --deer-border:var(--background-modifier-border); }
 .deer-dashboard *, .deer-dashboard *::before, .deer-dashboard *::after { box-sizing:border-box; }
 .deer-dashboard { scrollbar-gutter:stable; }
 .deer-dashboard [hidden] { display:none!important; }
@@ -18,13 +18,13 @@
 .deer-brand>.deer-icon { color:var(--text-accent); width:22px; height:22px; }
 .deer-sidebar>.deer-muted { padding-inline:8px; margin:8px 0 28px; font-size:12px; }
 .deer-navigation { display:flex; flex-direction:column; gap:4px; }
-.deer-navigation .deer-button { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:10px 12px; text-align:left; white-space:normal; background:transparent; color:var(--text-muted); }
+.deer-navigation .deer-button { display:flex; justify-content:flex-start; align-items:center; gap:8px; width:100%; min-height:44px; padding:10px 8px; text-align:left; white-space:normal; background:transparent; color:var(--text-muted); }
+.deer-navigation .deer-button>.deer-icon { width:22px; padding:2px; }
 .deer-navigation .deer-button[aria-current="page"] { color:var(--text-on-accent,white); background:var(--interactive-accent); font-weight:500; }
 .deer-navigation .deer-button[data-action="overview"] { margin-top:16px; }
 .deer-activity { margin-top:32px; padding:16px 8px 0; }
-.deer-activity-title { color:var(--text-muted); font-size:12px; cursor:pointer; min-height:32px; }
 .deer-statistics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:8px 0 20px; }
-.deer-statistic dt { color:var(--text-muted); font-size:11px; }
+.deer-statistic dt { min-height:3.2em; color:var(--text-muted); font-size:11px; }
 .deer-statistic dd { margin:4px 0 0; font-size:20px; font-weight:500; font-variant-numeric:tabular-nums; }
 .deer-heatmap { display:grid; grid-template-rows:repeat(7,1fr); grid-auto-flow:column; grid-template-columns:repeat(13,minmax(0,1fr)); gap:3px; }
 .deer-heat-cell { aspect-ratio:1; border-radius:2px; background:var(--deer-border); }
@@ -164,8 +164,7 @@
  .deer-navigation .deer-button { width:auto; min-height:40px; padding:8px 10px; font-size:13px; }
  .deer-navigation .deer-button[data-action="overview"] { margin-top:0; }
  .deer-activity { margin-top:12px; padding-top:8px; }
- .deer-activity-title { min-height:24px; }
- .deer-heatmap,.deer-statistics { max-width:260px; }
+  .deer-heatmap,.deer-statistics { max-width:260px; }
  .deer-main { flex:1 0 100%; padding:24px 16px; }
  .deer-composer { padding:12px; }
  .deer-page-header { flex-wrap:wrap; gap:12px; }
@@ -182,3 +181,11 @@
 }
 @media (prefers-reduced-motion:reduce) { .deer-dashboard button { transition:none; } }
 @media (pointer:coarse) { .deer-dashboard .deer-icon-button { width:44px; height:44px; } .deer-dashboard .deer-save,.deer-reader-header button,.deer-excerpt-actions button { min-height:44px; } }
+
+.deer-reflection-prompts { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.deer-dashboard .deer-reflection-prompts button { padding:6px 10px; min-height:36px; color:var(--text-accent); background:var(--background-secondary); font-size:12px; }
+.deer-reflection-hint { margin:8px 0 0; font-size:12px; line-height:1.6; color:var(--text-muted); }
+
+.deer-dashboard .deer-excerpt-toggle { display:block; margin:0 0 16px; min-height:36px; padding:4px 0; background:transparent; color:var(--text-accent); font-size:12px; text-align:left; white-space:normal; }
+
+.deer-reader.deer-recalling>.deer-reader-content { visibility:hidden; }

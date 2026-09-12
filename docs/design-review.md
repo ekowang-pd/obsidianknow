@@ -78,3 +78,11 @@ UI UX Pro Max 搜索匹配到知识管理和网格排版，但其棕色、衬线
 
 ### Rounded compact deer mark
 User feedback: replace pointed stag with a friendlier rounded fawn; match the wordmark height. Keep the purple fill and notebook cutout, use rounded antler tips, oval ears and a soft chin. Reduce the box from 30 to 22 px (visible silhouette about 18 px), center beside the existing 17 px wordmark with 8 px spacing. Review: avoid a shield-shaped jaw and angular page corners; favor a compact face with generous curves.
+
+
+### 2026-09-12 — Native theme and vault browsing fixes
+- Derive dashboard background from primary surface plus 4% text color so equal native theme backgrounds still separate cards. Keep filled icons; force navigation start alignment and shared brand/text columns.
+- Activity is always visible, with no disclosure heading; it now counts visible vault Markdown updates.
+- All notes now includes existing vault Markdown. Folder search remains scoped; dot paths and configured hidden folders are excluded. Existing notes are not modified.
+- Validation: 143 tests passed; plugin and preview type checks/builds and release asset check passed. Browser search for a body-only term found the existing reading article. Screenshot reviewed for aligned navigation and visible activity/cards. Native Obsidian theme verification remains manual.
+- Current changes are a local preview, not a new released version.

@@ -39,7 +39,6 @@ export class DeerNotesView extends ItemView {
   private previewComponent: Component | null = null;
   private reader: ReaderController | null = null;
   private sidebar!: HTMLElement;
-  private activityEl: HTMLDetailsElement | null = null;
   private results!: HTMLElement;
   private composer!: HTMLElement;
   private pageTitle!: HTMLElement;
@@ -197,12 +196,9 @@ export class DeerNotesView extends ItemView {
     this.element(brand, "h1", "", this.t("小鹿笔记"));
     this.element(this.sidebar, "p", "deer-muted", this.t("捕捉灵感，让知识慢慢生长"));
     const nav = this.element(this.sidebar, "nav", "deer-navigation");
-    const activity = this.element(this.sidebar, "details", "deer-activity");
-    activity.open = this.activityEl?.open ?? false;
-    this.activityEl = activity;
-    const activityToggle = this.element(activity, "summary", "deer-activity-title", this.t("最近修改活动"));
-    activityToggle.title = this.t("展开或收起近 91 天修改活动");
-    const summary = buildContributions(this.snapshot.deerNotes.map(note => new Date(note.mtime)), new Date());
+    const activity = this.element(this.sidebar, "section", "deer-activity");
+    activity.setAttribute("aria-label", this.t("最近修改活动"));
+    const summary = buildContributions(this.snapshot.markdownFiles.filter(file => !file.path.split("/").some(part => part.startsWith(".")) && !this.settings.hiddenRootFolders.some(folder => file.path.startsWith(`${folder}/`))).map(note => new Date(note.mtime)), new Date());
     const stats = this.element(activity, "dl", "deer-statistics");
     for (const [label, count] of [[this.t("修改笔记"), summary.total], [this.t("活跃天数"), summary.activeDays], [this.t("连续活跃"), summary.streak]] as const) {
       const stat = this.element(stats, "div", "deer-statistic");

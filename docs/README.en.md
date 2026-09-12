@@ -1,55 +1,62 @@
 # Deer Notes
 
-Capture ideas, read your notes, and turn useful passages into knowledge—all within Obsidian.
+**Keep the passage. Write what it means to you.**
 
-Deer Notes is a local-first dashboard for quick notes, Markdown reading, and excerpts. Its minimal interface keeps content easy to browse, while your notes remain ordinary Markdown files in your vault.
+Deer Notes brings quick capture, a readable Markdown library, and source-linked excerpts into one Obsidian dashboard. Use it when you want to move from collecting passages to writing your own explanations, connections, and next steps. Your notes remain ordinary Markdown files in your vault.
 
-## Features
+**Version availability:** reflection prompts and hide-and-explain are in **0.2.0-preview.1**, a GitHub prerelease for testing. The stable release remains **0.1.2**. A preview release does not mean the new version has passed community review.
 
-- **Quick capture:** Write Markdown notes with formatting tools, tags, and image attachments.
-- **Readable note cards:** Browse content previews, dates, and tags.
-- **Search and folders:** Find notes by title, path, tags, or content, and explore top-level folders.
-- **Built-in reader:** Read Markdown in a focused view or open the original file in Obsidian.
-- **Selection excerpts:** Select a passage, add your thoughts, and save an excerpt with its source link.
-- **Knowledge overview:** Explore document growth over 7, 30, or 90 days, folder distribution, recent updates, and recent articles in each category.
-- **Activity heatmap:** View note modification activity over the past 13 weeks.
+[Download preview](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.2.0-preview.1) · [Stable release](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.1.2) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
 
-## Interface language
+## A simple reading-to-understanding workflow
 
-In Obsidian, open Settings → Deer Notes and select English under Interface language (界面语言). The selection is saved per vault and updates the open dashboard without discarding drafts.
+### 1. Find something worth returning to
+Browse existing Markdown files in **All notes**, or choose a folder. Search titles, paths, tags, or body text. Search within a folder stays in that folder. Hidden folders and dot paths are excluded from the displayed lists.
 
-## Getting started
+![Browse a folder with readable note previews and visible activity](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/browse.png)
 
-Enable Deer Notes, then click its ribbon icon or search the command palette for **打开小鹿笔记** (Open Deer Notes). Choose **Settings → Deer Notes → Interface language → English** to switch the interface. The default is Simplified Chinese. Notes, tags, and folder names are not translated.
+### 2. Read and keep the source
+Open a card to read. Select a passage and choose **Take a note**. The excerpt keeps its source link; the original document is not edited. You can also choose **Open in Obsidian** to edit the original with native tools.
 
-### Capture a note
+![Focused Markdown reader showing the demonstration reading article](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/reading.png)
 
-Open **全部笔记** (All Notes), enter your thoughts, and click **保存笔记** (Save Note). You can also press **Ctrl+Enter** on Windows/Linux or **Cmd+Enter** on macOS.
+### 3. Add your own thinking — preview feature
+Write freely, or choose **My understanding**, **Connections**, or **Try it out**. Each prompt inserts a small Markdown heading and asks a concrete question. Reusing a prompt returns to that section without duplicating its heading, including across Chinese and English interface changes.
 
-The quick-note editor appears only in All Notes. Switching to a folder or the overview preserves your draft while the dashboard remains open.
+![Excerpt note with the source passage, a personal explanation, and a concrete next step](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/reflection.png)
 
-### Browse and read
+### 4. Explain first, then check — preview feature
+Choose **Hide excerpt and explain it yourself** to hide both the excerpt and the background article. Write what you remember, then show the source to check your interpretation. Save with **Save note** or **Ctrl/Cmd+Enter**. Failed saves retain the open draft for retry.
 
-Select a folder in the sidebar and use search to narrow the list. Click a note card to read it. Choose **在 Obsidian 中打开** (Open in Obsidian) to work with the original file.
+![Source hidden while the user writes their understanding](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/recall.png)
 
-### Save an excerpt
+*Screenshots use the shared browser preview with demonstration content and English controls. Folder names and note content retain their original language. Native Obsidian themes may look different. The example explanation was written for these screenshots; the plugin does not generate it.*
 
-Select text in the built-in reader, choose **做笔记** (Take a Note), add your thoughts, and save. Excerpts are grouped by source and date. The original document stays unchanged.
+## Other everyday tools
 
-### Explore your knowledge
+- **Quick capture:** Markdown formatting, tags, and image attachments in All notes.
+- **Knowledge overview:** 7/30/90-day growth estimates, folder distribution, and recent documents.
+- **Visible activity:** a 13-week heatmap of recent file modifications. It counts updates, not study sessions or mastery.
+- **Chinese and English:** change Interface language in Settings → Deer Notes. Your notes and folder names stay unchanged.
 
-Open **知识概览** (Knowledge Overview) to see document counts, growth trends, folder distribution, and recent updates. Click an article to read it or expand the growth chart's daily data.
+## Install and try it
 
-Growth is estimated from the creation times of files currently in your vault. Deleted files are not included, and importing or copying files may affect these dates.
+For the preview, download **main.js**, **manifest.json**, and **styles.css** from the same release. Copy them into your vault's **.obsidian/plugins/deer-notes/** folder and reload Obsidian, then enable Deer Notes in Community plugins. The source-code ZIP is not the installable plugin package.
 
-## Storage and privacy
+Open the ribbon icon or run **Open Deer Notes** from the command palette. The default language is Simplified Chinese; choose **Settings → Deer Notes → 界面语言 → English** if needed.
 
-Notes are ordinary `.md` files with metadata and optional source links. The default notes folder is `小鹿笔记`, with images in its `附件` subfolder. Choose another notes folder in the plugin settings if needed. This affects future saves and does not move, rename, or delete existing files.
+For your first session: open a Markdown article → select one useful sentence → Take a note → explain it in your own words → save. Excerpts from the same source on the same day are grouped in one note.
 
-Deer Notes makes no network requests and includes no telemetry or advertising. It reads and writes through Obsidian's Vault API. Your notes and attachments remain under your control.
+## Your files stay yours
 
-## Compatibility and support
+New notes default to **小鹿笔记**, with images in its **附件** subfolder. Changing the configured folder affects future saves; it does not move existing files. Notes remain readable and editable after disabling the plugin.
 
-The current interface and text-selection workflow primarily target desktop use. Mobile compatibility has not yet been verified.
+The plugin makes no network requests and includes no telemetry. It indexes vault Markdown paths and timestamps and reads content as needed for search, reading, and previews. Hiding a folder is a display preference, not an access restriction. Screenshot images in this README are hosted on GitHub; they are not fetched by the plugin.
 
-Report bugs and request features through [GitHub Issues](https://github.com/ekowang-pd/obsidianknow/issues). Deer Notes is open source under the MIT License.
+## Scope and compatibility
+
+Requires Obsidian **1.7.2+**. Desktop is the primary testing target; mobile and individual themes require further verification. This is a writing aid, not an AI summarizer, spaced-repetition scheduler, or measure of understanding. Closing an unsaved draft or restarting does not provide persistent draft recovery.
+
+Growth charts use creation dates of existing files; imports, copies, and deletions affect their interpretation.
+
+[Development and validation](development.md) · [License](../LICENSE)
