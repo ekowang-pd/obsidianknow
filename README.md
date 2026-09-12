@@ -4,9 +4,9 @@
 
 Deer Notes brings quick capture, a readable Markdown library, and source-linked excerpts into one Obsidian dashboard. Use it when you want to move from collecting passages to writing your own explanations, connections, and next steps. Your notes remain ordinary Markdown files in your vault.
 
-**Version availability:** reflection prompts and hide-and-explain are in **0.2.0-preview.1**, a GitHub prerelease for testing. The stable release remains **0.1.2**. A preview release does not mean the new version has passed community review.
+**Current release: 0.2.0.** Includes reflection prompts and hide-and-explain. GitHub release availability and Obsidian community review are separate; check the community listing for review status.
 
-[Download preview](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.2.0-preview.1) · [Stable release](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.1.2) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
+[Download 0.2.0](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.2.0) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
 
 ## A simple reading-to-understanding workflow
 
@@ -20,12 +20,12 @@ Open a card to read. Select a passage and choose **Take a note**. The excerpt ke
 
 ![Focused Markdown reader showing the demonstration reading article](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/reading.png)
 
-### 3. Add your own thinking — preview feature
+### 3. Add your own thinking
 Write freely, or choose **My understanding**, **Connections**, or **Try it out**. Each prompt inserts a small Markdown heading and asks a concrete question. Reusing a prompt returns to that section without duplicating its heading, including across Chinese and English interface changes.
 
 ![Excerpt note with the source passage, a personal explanation, and a concrete next step](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/reflection.png)
 
-### 4. Explain first, then check — preview feature
+### 4. Explain first, then check
 Choose **Hide excerpt and explain it yourself** to hide both the excerpt and the background article. Write what you remember, then show the source to check your interpretation. Save with **Save note** or **Ctrl/Cmd+Enter**. Failed saves retain the open draft for retry.
 
 ![Source hidden while the user writes their understanding](https://raw.githubusercontent.com/ekowang-pd/obsidianknow/main/assets/screenshots/recall.png)
@@ -41,7 +41,7 @@ Choose **Hide excerpt and explain it yourself** to hide both the excerpt and the
 
 ## Install and try it
 
-For the preview, download **main.js**, **manifest.json**, and **styles.css** from the same release. Copy them into your vault's **.obsidian/plugins/deer-notes/** folder and reload Obsidian, then enable Deer Notes in Community plugins. The source-code ZIP is not the installable plugin package.
+For manual installation, download **main.js**, **manifest.json**, and **styles.css** from the same release. Copy them into your vault's **.obsidian/plugins/deer-notes/** folder and reload Obsidian, then enable Deer Notes in Community plugins. The source-code ZIP is not the installable plugin package.
 
 Open the ribbon icon or run **Open Deer Notes** from the command palette. The default language is Simplified Chinese; choose **Settings → Deer Notes → 界面语言 → English** if needed.
 
@@ -67,7 +67,7 @@ Growth charts use creation dates of existing files; imports, copies, and deletio
 
 小鹿笔记把快速记录、已有知识库浏览、阅读和选文摘录放在同一个界面。适合希望从“收藏一句话”进一步走到“解释它、联系经验、试着应用”的用户。
 
-**一期新功能位于 0.2.0-preview.1 预览版，稳定版仍为 0.1.2。** 上面的四张图依次展示目录浏览、阅读、写下自己的理解，以及隐藏原文后复述。
+**当前正式发布版本为 0.2.0，市场审核状态请以社区页面为准。** 上面的四张图依次展示目录浏览、阅读、写下自己的理解，以及隐藏原文后复述。
 
 1. 在“全部笔记”或目录中找到已有 Markdown，搜索支持标题、路径、标签和正文。
 2. 打开文章、选中文字，点击“做笔记”；原文与自己的笔记分开保存，并保留来源。

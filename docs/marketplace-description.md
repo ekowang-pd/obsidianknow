@@ -1,6 +1,6 @@
 # Community listing copy
 
-Use the preview section only while clearly labeling it as a GitHub preview; do not advertise it as available in stable 0.1.2.
+Product copy for 0.2.0. Publication on GitHub does not by itself confirm community review approval.
 
 ## Short description
 Capture notes, read Markdown, and save source-linked excerpts with your own thoughts in a local-first dashboard.
@@ -10,8 +10,8 @@ Deer Notes helps you keep useful passages and the ideas they spark, together in 
 
 Quick capture supports Markdown, tags, and images. Folder navigation, search, a knowledge overview, and recent activity help you return to your material. Interface text is available in Simplified Chinese and English.
 
-### New in the GitHub preview: explain it in your own words
-The 0.2.0-preview.1 prerelease adds optional My understanding, Connections, and Try it out prompts. Hide the source while you write, then show it to check your interpretation. These features are not yet part of stable 0.1.2.
+### Explain it in your own words
+Version 0.2.0 adds optional My understanding, Connections, and Try it out prompts. Hide the source while you write, then show it to check your interpretation.
 
 [See the illustrated workflow and download options](https://github.com/ekowang-pd/obsidianknow#readme).
 
