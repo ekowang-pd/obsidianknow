@@ -124,3 +124,18 @@ it('continues body search after one unreadable file',async()=>{
  const state=new DashboardState({rootFolders:[],markdownFiles:[broken,good],deerNotes:[]},DEFAULT_SETTINGS,async path=>{if(path==='broken.md')throw new Error('gone');return 'unique-search-term';});
  await state.setSearchQuery('unique-search-term');expect(state.visibleFiles).toEqual([good]);
 });
+
+
+it("revisits only matching visible files, avoids the last pick, and handles empty lists", async () => {
+  const state = new DashboardState(snapshot, { ...DEFAULT_SETTINGS, hiddenRootFolders: ["10 项目"] });
+  state.selectFolder("01 收件箱");
+  const first = state.pickRevisit()!;
+  expect(first.path.startsWith("01 收件箱/")).toBe(true);
+  expect(state.pickRevisit(first.path)?.path).not.toBe(first.path);
+  await state.setSearchQuery("子目录");
+  expect(state.pickRevisit()?.path).toBe("01 收件箱/子目录/b.md");
+  await state.setSearchQuery("missing");
+  expect(state.pickRevisit()).toBeUndefined();
+  state.selectOverview();
+  expect(state.pickRevisit()).toBeUndefined();
+});

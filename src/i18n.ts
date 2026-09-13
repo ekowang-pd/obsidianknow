@@ -1,5 +1,7 @@
 export type Language = 'zh-CN' | 'en';
 const english: Record<string, string> = {
+  "随机重读": "Revisit a note",
+  "从当前列表随机打开一篇笔记": "Open a random note from the current list",
   "隐藏原文，试着复述": "Hide excerpt and explain it yourself",
   "显示原文，核对理解": "Show excerpt and check your understanding",
   "思考提示（可选）": "Reflection prompts (optional)",

@@ -70,3 +70,29 @@ it("opens a dashboard descriptor in its internal reader and disposes it on view 
   expect(app.workspace.openLinkText).not.toHaveBeenCalled();
   await view.onClose(); expect(host.children).toHaveLength(0); plugin.unload(); host.remove();
 });
+
+
+it("revisits a visible note without changing the draft or search and prevents duplicate opens", async () => {
+  const file = { path: "notes/a.md", name: "a.md", basename: "a", extension: "md", ctime: 1, mtime: 2 };
+  const snapshot = { rootFolders: [], markdownFiles: [file], deerNotes: [] };
+  const index = { getSnapshot: () => snapshot, subscribe: () => () => {}, initialize: async () => {} };
+  let finish!: () => void;
+  const open = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const view = new DeerNotesView({ app: {} } as never, index as never, {} as never, DEFAULT_SETTINGS, open, async () => "body");
+  const host = document.createElement("div");
+  Object.defineProperty(view, "contentEl", { value: host }); document.body.append(host);
+  try {
+    await view.onOpen();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    const input = host.querySelector("textarea")!;
+    input.value = "keep my thought"; input.dispatchEvent(new Event("input"));
+    const button = host.querySelector<HTMLButtonElement>('[data-action="revisit"]')!;
+    button.click(); button.click();
+    expect(open).toHaveBeenCalledExactlyOnceWith("notes/a.md");
+    expect(button.disabled).toBe(true);
+    expect(input.value).toBe("keep my thought");
+    finish();
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    expect(button.disabled).toBe(false);
+  } finally { await view.onClose(); host.remove(); }
+});

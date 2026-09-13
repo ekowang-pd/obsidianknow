@@ -36,6 +36,12 @@ export class DashboardState {
       .sort((a, b) => b.mtime - a.mtime);
   }
 
+  pickRevisit(previousPath?: string): DashboardFile | undefined {
+    const files = this.visibleFiles;
+    const pool = files.length > 1 ? files.filter(file => file.path !== previousPath) : files;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   selectNotes(): void { this.select({ kind: "notes" }); }
   selectFolder(path: string): void {
     this.select(this.navigation.some(item => item.kind === "folder" && item.id === path)
