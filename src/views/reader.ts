@@ -236,17 +236,15 @@ export class ReaderController {
   }
 
   private renderHtml(html: string, path: string, content: HTMLElement): void {
-    const safe = DOMPurify.sanitize(html, { FORBID_TAGS: ["script", "style", "link", "iframe", "object", "embed", "form", "meta", "base", "video", "audio", "source", "picture", "svg", "math", "canvas"], FORBID_ATTR: ["style", "srcset"] });
-    const template = content.ownerDocument.createElement("template");
-    template.innerHTML = safe;
-    for (const image of Array.from(template.content.querySelectorAll("img"))) {
+    const safe = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true, FORBID_TAGS: ["script", "style", "link", "iframe", "object", "embed", "form", "meta", "base", "video", "audio", "source", "picture", "svg", "math", "canvas"], FORBID_ATTR: ["style", "srcset"] });
+    for (const image of Array.from(safe.querySelectorAll("img"))) {
       const src = image.getAttribute("src") ?? "";
       const resolved = this.resolveLocalResource(src, path);
       if (resolved) image.src = resolved;
       else image.removeAttribute("src");
     }
-    for (const link of Array.from(template.content.querySelectorAll("a"))) link.removeAttribute("href");
-    content.replaceChildren(template.content);
+    for (const link of Array.from(safe.querySelectorAll("a"))) link.removeAttribute("href");
+    content.replaceChildren(safe);
   }
 
   private resolveLocalResource(src: string, source: string): string | undefined {
