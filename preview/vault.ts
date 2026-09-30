@@ -37,6 +37,7 @@ export class PreviewVault {
   getAllLoadedFiles(): Entry[] { return [...this.entries.values()]; }
   getMarkdownFiles(): PreviewFile[] { return this.getAllLoadedFiles().filter((file): file is PreviewFile => 'extension' in file && file.extension === 'md'); }
   async cachedRead(file: PreviewFile): Promise<string> { return file.content; }
+  getResourcePath(file: PreviewFile): string { return file.dataUrl ?? ""; }
   on(event: string, callback: (entry: Entry) => unknown) { const ref = { event, callback }; this.listeners.add(ref); return ref; }
   offref(ref: { event: string; callback: (entry: Entry) => unknown }): void { this.listeners.delete(ref); }
   async createFolder(path: string): Promise<PreviewFolder> {

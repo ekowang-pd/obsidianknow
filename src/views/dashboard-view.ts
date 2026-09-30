@@ -2,10 +2,11 @@ import { RichComposer } from "./rich-composer";
 import { noteCover } from "./note-cover";
 import { translate } from "../i18n";
 import { Component, ItemView, MarkdownRenderer, Notice } from "obsidian";
+import DOMPurify from "dompurify";
 import { setFilledIcon } from "./icons";
 import { renderKnowledgeOverview } from "./overview";
 import type { OverviewDays } from "../domain/overview";
-import type { WorkspaceLeaf } from "obsidian";
+import type { TFile, WorkspaceLeaf } from "obsidian";
 
 import { buildContributions } from "../domain/contributions";
 import type { NoteService } from "../services/note-service";
@@ -320,7 +321,8 @@ export class DeerNotesView extends ItemView {
     const excerpts: { path: string; mtime: number; title: string; tags: readonly string[]; element: HTMLElement; more: HTMLElement }[] = [];
     for (const file of files) {
       const row = this.element(list, "li", "deer-note-row");
-      const title = file.basename;
+      const extension = file.extension.toLowerCase();
+      const title = extension === "md" ? file.basename : file.name;
       const button = this.element(row, "button", "deer-note-link");
       button.type = "button";
       button.dataset.action = "open-file";
@@ -332,8 +334,9 @@ export class DeerNotesView extends ItemView {
       const heading = this.element(button, "span", "deer-note-heading");
       const icon = this.element(heading, "span", "deer-icon");
       icon.setAttribute("aria-hidden", "true");
-      setFilledIcon(icon, "notebook");
+      setFilledIcon(icon, ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extension) ? "image" : extension === "md" ? "notebook" : "file-text");
       this.element(heading, "span", "deer-note-title", title);
+      if (extension !== "md") this.element(heading, "span", "deer-file-type", extension.toUpperCase());
       this.element(button, "span", "deer-note-date", modified);
       const excerpt = this.element(button, "span", "deer-note-summary");
       const meta = this.element(button, "span", "deer-note-meta");
@@ -346,7 +349,15 @@ export class DeerNotesView extends ItemView {
       meta.hidden = !meta.children.length;
       const more = this.element(button, "span", "deer-note-open", this.t("阅读全文"));
       more.hidden = true;
-      excerpts.push({ path: file.path, mtime: file.mtime, title, tags: "tags" in file ? file.tags : [], element: excerpt, more });
+      if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extension)) {
+        const image = this.element(button, "img", "deer-note-cover deer-file-image");
+        image.alt = title; image.loading = "lazy";
+        const source = this.app.vault.getAbstractFileByPath(file.path);
+        const url = this.resolveCover?.(file.path, file.path) ?? (source && "extension" in source ? this.app.vault.getResourcePath(source as TFile) : undefined);
+        if (url) image.src = url;
+        else image.remove();
+        excerpt.hidden = true;
+      } else excerpts.push({ path: file.path, mtime: file.mtime, title, tags: "tags" in file ? file.tags : [], element: excerpt, more });
     }
     let next = 0;
     const fill = async () => {
@@ -364,7 +375,8 @@ export class DeerNotesView extends ItemView {
         try {
           const body = await cached.body;
           if (!this.closed && summaryRevision === this.summaryRevision) {
-            const cover = noteCover(body);
+            const isHtml = /\.html?$/i.test(item.path);
+            const cover = isHtml ? null : noteCover(body);
             if (cover) {
               try {
                 const file = this.app.metadataCache?.getFirstLinkpathDest(cover.path, item.path);
@@ -379,7 +391,7 @@ export class DeerNotesView extends ItemView {
                 }
               } catch { /* A missing attachment must not hide the note text. */ }
             }
-            const summary = noteSummary(body, item.title, item.tags);
+            const summary = noteSummary(isHtml ? DOMPurify.sanitize(body, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }) : body, item.title, item.tags);
             item.element.textContent = summary;
             item.element.hidden = !summary;
             item.more.hidden = summary.length < 140 && summary.split("\n").length < 5;

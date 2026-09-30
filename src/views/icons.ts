@@ -4,6 +4,7 @@ import { DEER_MARK_PATHS } from "./brand-mark";
 // even-odd fill, so icons remain legible on selected buttons and in dark themes.
 const paths: Record<string, string> = {
   notebook: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm1 0v18h2V3H6Zm5 4v2h7V7h-7Zm0 5v2h5v-2h-5Z",
+  "file-text": "M5 2h9l6 6v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm8 2v5h5l-5-5ZM7 12v2h10v-2H7Zm0 4v2h8v-2H7Z",
   folder: "M3 4h6l2 2h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z",
   "chart-no-axes-combined": "M3 13h4v8H3v-8Zm7-5h4v13h-4V8Zm7-5h4v18h-4V3Z",
   tag: "M3 2h8l11 11a2 2 0 0 1 0 3l-6 6a2 2 0 0 1-3 0L2 11V3a1 1 0 0 1 1-1Zm4 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z",

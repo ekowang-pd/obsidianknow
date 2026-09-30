@@ -1,5 +1,6 @@
 import { translate, type Language } from "../i18n";
 import { Component, MarkdownRenderer, Notice, parseYaml } from "obsidian";
+import DOMPurify from "dompurify";
 import { setFilledIcon } from "./icons";
 import { parseDeerNote } from "../domain/notes";
 import type { App, TFile } from "obsidian";
@@ -21,13 +22,19 @@ export class ReaderController {
   private revision = 0;
   private disposed = false;
   private scrollPosition: { top: number; left: number } | null = null;
+  private editing = false;
+  private saving = false;
+  private original = "";
+  private editInput: HTMLTextAreaElement | null = null;
 
   constructor(private app: App, private host: HTMLElement, private notes: () => NoteService, private language: () => Language = () => "zh-CN") {}
 
   async open(filePath: string): Promise<void> {
     if (this.disposed || this.editor?.isSaving) return;
     const trigger = this.root ? this.trigger : this.host.ownerDocument.activeElement as HTMLElement | null;
-    this.close(); this.trigger = trigger;
+    this.close();
+    if (this.root) return;
+    this.trigger = trigger;
     const revision = ++this.revision;
     this.scrollPosition = { top: this.host.scrollTop, left: this.host.scrollLeft };
     this.host.scrollTop = 0; this.host.scrollLeft = 0;
@@ -39,6 +46,7 @@ export class ReaderController {
     this.host.classList.add("deer-reader-open");
     const root = this.element(this.host, "section", "deer-reader");
     this.root = root;
+    root.dataset.path = filePath;
     root.setAttribute("aria-label", this.t("文档阅读器"));
     const header = this.element(root, "header", "deer-reader-header");
     const close = this.element(header, "button", "deer-reader-close");
@@ -53,11 +61,63 @@ export class ReaderController {
     this.element(title, "span", "deer-sr-only", filePath);
     const open = this.element(header, "button", "deer-reader-external", this.t("在 Obsidian 中打开"));
     open.type = "button";
+    const edit = this.element(header, "button", "deer-reader-edit", this.t("编辑原文"));
+    edit.type = "button";
+    edit.hidden = true;
+    const cancel = this.element(header, "button", "deer-reader-cancel", this.t("取消编辑"));
+    cancel.type = "button"; cancel.hidden = true;
+    const save = this.element(header, "button", "deer-reader-save mod-cta", this.t("保存修改"));
+    save.type = "button"; save.hidden = true;
     const content = this.element(root, "article", "deer-reader-content markdown-rendered");
     this.content = content; content.tabIndex = -1;
     content.textContent = this.t("正在加载…");
     this.editor = new SelectionNoteController(root, this.notes, () => content.focus(), this.language);
     this.listen(close, "click", () => this.close());
+    this.listen(edit, "click", () => {
+      if (this.editing) return;
+      this.editing = true;
+      const input = this.element(root, "textarea", "deer-reader-editor");
+      input.setAttribute("aria-label", this.t(filePath.toLowerCase().endsWith(".md") ? "Markdown 原文" : "HTML 原文"));
+      input.value = this.original; this.editInput = input;
+      content.hidden = true; edit.hidden = true; cancel.hidden = false; save.hidden = false;
+      input.focus();
+      this.listen(input, "keydown", event => {
+        const key = event as KeyboardEvent;
+        if (key.key === "Enter" && (key.ctrlKey || key.metaKey) && !key.isComposing) {
+          key.preventDefault(); void saveEdit();
+        }
+      });
+    });
+    const endEdit = () => {
+      this.editing = false; this.editInput?.remove(); this.editInput = null;
+      content.hidden = false; edit.hidden = false; cancel.hidden = true; save.hidden = true;
+      edit.focus();
+    };
+    this.listen(cancel, "click", () => {
+      if (this.saving) return;
+      if (this.editInput?.value !== this.original && !root.ownerDocument.defaultView?.confirm(this.t("放弃未保存的修改？"))) return;
+      endEdit();
+    });
+    const saveEdit = async () => {
+      if (this.saving || !this.editInput) return;
+      const next = this.editInput.value;
+      const file = this.resolveFile(filePath);
+      this.saving = true; save.disabled = true; cancel.disabled = true;
+      try {
+        await this.app.vault.process(file, current => {
+          if (current !== this.original) throw new Error(this.t("文件已在别处修改，请复制当前内容后重新打开。"));
+          return next;
+        });
+        this.original = next;
+        if (revision !== this.revision || this.disposed) return;
+        if (file.extension.toLowerCase() === "md") await this.renderMarkdown(next, filePath, content, title, revision);
+        else this.renderHtml(next, filePath, content);
+        endEdit();
+        new Notice(this.t("修改已保存"));
+      } catch (error) { this.showError(error, revision); }
+      finally { this.saving = false; save.disabled = false; cancel.disabled = false; }
+    };
+    this.listen(save, "click", () => { void saveEdit(); });
     this.listen(open, "click", () => {
       try { void this.app.workspace.getLeaf("tab").openFile(this.resolveFile(filePath)).catch(error => this.showError(error, revision)); }
       catch (error) { this.showError(error, revision); }
@@ -75,6 +135,7 @@ export class ReaderController {
       event.preventDefault(); event.stopPropagation();
       if (this.menu) { this.hideMenu(); content.focus(); }
       else if (this.editor?.isOpen) this.editor.close();
+      else if (this.editing) cancel.click();
       else this.close();
     });
     this.listen(content, "click", event => {
@@ -89,27 +150,22 @@ export class ReaderController {
     close.focus();
     try {
       const file = this.resolveFile(filePath);
-      const markdown = await this.app.vault.cachedRead(file);
+      const extension = file.extension.toLowerCase();
+      const markdown = ["md", "html", "htm"].includes(extension) ? await this.app.vault.cachedRead(file) : "";
       if (revision !== this.revision || this.disposed) return;
-      const component = new Component(); component.load(); this.component = component;
-      const target = content.ownerDocument.createElement("div");
-      try {
-        await MarkdownRenderer.render(this.app, markdown, target, filePath, component);
-      } finally {
-        // Late Markdown processors may register children after the first unload.
-        if (revision !== this.revision || this.disposed) component.unload();
-      }
-      if (revision === this.revision && !this.disposed) {
-        if (!target.querySelector("h1")) {
-          const folder = title.querySelector(".deer-reader-folder");
-          if (folder) folder.textContent = filePath.replace(/\.md$/i, "").split("/").join(" / ");
-        }
-        if (parseDeerNote(markdown, parseYaml)) {
-          for (const heading of Array.from(target.querySelectorAll("h2"))) {
-            if (/^\d{2}:\d{2}:\d{2}$/.test(heading.textContent?.trim() ?? "")) heading.classList.add("deer-note-timestamp");
-          }
-        }
-        content.replaceChildren(target);
+      if (extension === "md") {
+        this.original = markdown;
+        edit.hidden = false;
+        await this.renderMarkdown(markdown, filePath, content, title, revision);
+      } else if (extension === "html" || extension === "htm") {
+        this.original = markdown;
+        edit.hidden = false;
+        this.renderHtml(markdown, filePath, content);
+      } else {
+        const image = this.element(content, "img", "deer-reader-image");
+        image.alt = file.basename;
+        image.src = this.app.vault.getResourcePath(file);
+        content.replaceChildren(image);
       }
     } catch (error) {
       if (revision === this.revision && !this.disposed) { content.replaceChildren(); this.showError(error, revision); }
@@ -117,13 +173,18 @@ export class ReaderController {
   }
 
   close(): void {
-    if (this.editor?.isSaving && !this.disposed) return;
+    if ((this.editor?.isSaving || this.saving) && !this.disposed) return;
+    if (this.editing && this.editInput?.value !== this.original && !this.disposed) {
+      this.showError(new Error(this.t("请先保存或取消编辑。")), this.revision);
+      return;
+    }
     const wasOpen = this.root !== null;
     this.revision += 1;
     this.hideMenu(); this.editor?.dispose(); this.editor = null;
     this.cleanups.splice(0).forEach(cleanup => cleanup());
     this.component?.unload(); this.component = null;
     this.root?.remove(); this.root = null; this.content = null;
+    this.editing = false; this.editInput = null;
     this.restoreBackground.splice(0).forEach(restore => restore());
     this.host.classList.remove("deer-reader-open");
     if (this.trigger?.isConnected) this.trigger.focus();
@@ -144,11 +205,63 @@ export class ReaderController {
     if (label) label.textContent = this.t("返回列表");
     const external = this.root.querySelector(".deer-reader-external");
     if (external) external.textContent = this.t("在 Obsidian 中打开");
+    for (const [selector, label] of [[".deer-reader-edit", "编辑原文"], [".deer-reader-cancel", "取消编辑"], [".deer-reader-save", "保存修改"]]) {
+      const button = this.root.querySelector(selector);
+      if (button) button.textContent = this.t(label);
+    }
+    if (this.editInput) this.editInput.setAttribute("aria-label", this.t(this.root.dataset.path?.toLowerCase().endsWith(".md") ? "Markdown 原文" : "HTML 原文"));
     this.editor?.refreshLanguage();
     this.hideMenu();
   }
 
   dispose(): void { this.disposed = true; this.close(); }
+
+  private async renderMarkdown(markdown: string, path: string, content: HTMLElement, title: HTMLElement, revision: number): Promise<void> {
+    this.component?.unload();
+    const component = new Component(); component.load(); this.component = component;
+    const target = content.ownerDocument.createElement("div");
+    try { await MarkdownRenderer.render(this.app, markdown, target, path, component); }
+    finally { if (revision !== this.revision || this.disposed) component.unload(); }
+    if (revision !== this.revision || this.disposed) return;
+    if (!target.querySelector("h1")) {
+      const folder = title.querySelector(".deer-reader-folder");
+      if (folder) folder.textContent = path.replace(/\.md$/i, "").split("/").join(" / ");
+    }
+    if (parseDeerNote(markdown, parseYaml)) {
+      for (const heading of Array.from(target.querySelectorAll("h2"))) {
+        if (/^\d{2}:\d{2}:\d{2}$/.test(heading.textContent?.trim() ?? "")) heading.classList.add("deer-note-timestamp");
+      }
+    }
+    content.replaceChildren(target);
+  }
+
+  private renderHtml(html: string, path: string, content: HTMLElement): void {
+    const safe = DOMPurify.sanitize(html, { FORBID_TAGS: ["script", "style", "link", "iframe", "object", "embed", "form", "meta", "base", "video", "audio", "source", "picture", "svg", "math", "canvas"], FORBID_ATTR: ["style", "srcset"] });
+    const template = content.ownerDocument.createElement("template");
+    template.innerHTML = safe;
+    for (const image of Array.from(template.content.querySelectorAll("img"))) {
+      const src = image.getAttribute("src") ?? "";
+      const resolved = this.resolveLocalResource(src, path);
+      if (resolved) image.src = resolved;
+      else image.removeAttribute("src");
+    }
+    for (const link of Array.from(template.content.querySelectorAll("a"))) link.removeAttribute("href");
+    content.replaceChildren(template.content);
+  }
+
+  private resolveLocalResource(src: string, source: string): string | undefined {
+    if (!src || /^(?:[a-z][a-z\d+.-]*:|\/\/|\/)/i.test(src)) return undefined;
+    const path = src.split(/[?#]/)[0];
+    const folder = source.slice(0, source.lastIndexOf("/") + 1);
+    const segments: string[] = [];
+    for (const segment of `${folder}${path}`.split("/")) {
+      if (segment === "..") segments.pop();
+      else if (segment && segment !== ".") segments.push(segment);
+    }
+    const file = this.app.vault.getAbstractFileByPath(segments.join("/")) ?? this.app.vault.getAbstractFileByPath(path);
+    return file && "extension" in file && typeof file.extension === "string" && ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(file.extension.toLowerCase())
+      ? this.app.vault.getResourcePath(file as TFile) : undefined;
+  }
 
   private updateSelection(filePath: string): boolean {
     if (!this.root || !this.content || this.editor?.isOpen) return false;
@@ -200,7 +313,7 @@ export class ReaderController {
 
   private resolveFile(path: string): TFile {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!file || !("extension" in file) || typeof file.extension !== "string" || file.extension.toLowerCase() !== "md") {
+    if (!file || !("extension" in file) || typeof file.extension !== "string" || !["md", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(file.extension.toLowerCase())) {
       throw new Error(this.t("笔记已移动或不存在：{0}", path));
     }
     return file as TFile;

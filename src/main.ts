@@ -100,7 +100,7 @@ export default class DeerNotesPlugin extends Plugin {
 
   private async readBody(path: string): Promise<string> {
     const file = this.app.vault.getAbstractFileByPath(path);
-    if (!file || !("extension" in file) || typeof file.extension !== "string" || file.extension.toLowerCase() !== "md") {
+    if (!file || !("extension" in file) || typeof file.extension !== "string" || !["md", "html", "htm"].includes(file.extension.toLowerCase())) {
       throw new Error(`笔记已移动或不存在：${path}`);
     }
     return this.app.vault.cachedRead(file as TFile);

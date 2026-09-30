@@ -11,6 +11,7 @@ type VaultEvent = "create" | "modify" | "delete" | "rename";
 export interface VaultIndexAdapter {
   getRoot(): TFolder;
   getMarkdownFiles(): TFile[];
+  getAllLoadedFiles?(): TAbstractFile[];
   getAbstractFileByPath(path: string): TAbstractFile | null;
   cachedRead(file: TFile): Promise<string>;
   on(event: Exclude<VaultEvent, "rename">, callback: (entry: TAbstractFile) => unknown): EventRef;
@@ -43,6 +44,7 @@ export interface DeerNoteDescriptor extends VaultFileDescriptor {
 export interface VaultSnapshot {
   readonly rootFolders: readonly VaultFolderDescriptor[];
   readonly markdownFiles: readonly VaultFileDescriptor[];
+  readonly browseFiles?: readonly VaultFileDescriptor[];
   readonly deerNotes: readonly DeerNoteDescriptor[];
 }
 
@@ -66,6 +68,7 @@ export class VaultIndex {
   private readonly notesFolder: string;
   private readonly rootFolders = new Map<string, TFolder>();
   private readonly markdownFiles = new Map<string, TFile>();
+  private readonly browseFiles = new Map<string, TFile>();
   private readonly deerNotes = new Map<string, IndexedDeerNote>();
   private readonly listeners = new Set<(snapshot: VaultSnapshot) => void>();
   private readonly eventRefs: EventRef[] = [];
@@ -124,6 +127,7 @@ export class VaultIndex {
   private async scan(lifecycle: number): Promise<void> {
     const rootFolders = new Map<string, TFolder>();
     const markdownFiles = new Map<string, TFile>();
+    const browseFiles = new Map<string, TFile>();
     const deerNotes = new Map<string, IndexedDeerNote>();
 
     for (const child of this.vault.getRoot().children) {
@@ -131,7 +135,8 @@ export class VaultIndex {
         rootFolders.set(child.path, child);
       }
     }
-    for (const file of this.vault.getMarkdownFiles()) {
+    const markdown = this.vault.getMarkdownFiles();
+    for (const file of markdown) {
       const read = await this.readDeerNote(file);
       if (!this.isActive(lifecycle)) {
         return;
@@ -143,12 +148,16 @@ export class VaultIndex {
         }
       }
     }
+    for (const file of this.vault.getAllLoadedFiles?.() ?? markdown) {
+      if (isBrowseFile(file)) browseFiles.set(file.path, file);
+    }
     if (!this.isActive(lifecycle)) {
       return;
     }
 
     replaceMap(this.rootFolders, rootFolders);
     replaceMap(this.markdownFiles, markdownFiles);
+    replaceMap(this.browseFiles, browseFiles);
     replaceMap(this.deerNotes, deerNotes);
   }
 
@@ -201,9 +210,11 @@ export class VaultIndex {
       this.publish();
       return;
     }
-    if (!isMarkdownFile(entry)) {
+    if (!isFile(entry) || !isBrowseFile(entry)) {
       return;
     }
+    this.browseFiles.set(entry.path, entry);
+    if (!isMarkdownFile(entry)) { this.publish(); return; }
 
     const read = await this.readDeerNote(entry);
     if (!this.isActive(lifecycle) || !read.current) {
@@ -214,9 +225,11 @@ export class VaultIndex {
   }
 
   private async handleModify(entry: TAbstractFile, lifecycle: number): Promise<void> {
-    if (!this.isActive(lifecycle) || !isMarkdownFile(entry)) {
+    if (!this.isActive(lifecycle) || !isFile(entry) || !isBrowseFile(entry)) {
       return;
     }
+    this.browseFiles.set(entry.path, entry);
+    if (!isMarkdownFile(entry)) { this.publish(); return; }
 
     const read = await this.readDeerNote(entry);
     if (!this.isActive(lifecycle) || !read.current) {
@@ -249,6 +262,8 @@ export class VaultIndex {
     }
 
     const file = isFile(entry) ? entry : null;
+    const removedBrowse = this.browseFiles.delete(oldPath);
+    if (file && isBrowseFile(file)) this.browseFiles.set(file.path, file);
     const read = file && isMarkdownFile(file)
       ? await this.readDeerNote(file)
       : { current: false, meta: null };
@@ -259,7 +274,7 @@ export class VaultIndex {
     if (read.current && file) {
       this.replaceMarkdownFile(file, read.meta);
     }
-    if (removed || read.current) {
+    if (removed || read.current || removedBrowse || (file && isBrowseFile(file))) {
       this.publish();
     }
   }
@@ -290,8 +305,16 @@ export class VaultIndex {
       this.removeFile(oldFilePath, file);
       if (read.current) {
         this.replaceMarkdownFile(file, read.meta);
+        if (isBrowseFile(file)) this.browseFiles.set(file.path, file);
       }
       changed = true;
+    }
+    for (const [path, file] of [...this.browseFiles]) {
+      if (path.startsWith(prefix)) {
+        this.browseFiles.delete(path);
+        if (isBrowseFile(file)) this.browseFiles.set(file.path, file);
+        changed = true;
+      }
     }
     if (changed) {
       this.publish();
@@ -321,9 +344,10 @@ export class VaultIndex {
   }
 
   private removeFile(path: string, file?: TFile): boolean {
+    const removedBrowse = this.browseFiles.delete(path);
     const removed = this.markdownFiles.delete(path);
     const removedDeer = this.deerNotes.delete(path);
-    return this.removeFileByIdentity(file) || removedDeer || removed;
+    return this.removeFileByIdentity(file) || removedDeer || removed || removedBrowse;
   }
 
   private removeFileByIdentity(file: TFile | undefined): boolean {
@@ -354,6 +378,9 @@ export class VaultIndex {
         changed = this.removeFile(key) || changed;
       }
     }
+    for (const key of [...this.browseFiles.keys()]) {
+      if (key.startsWith(prefix)) changed = this.browseFiles.delete(key) || changed;
+    }
     return changed;
   }
 
@@ -373,7 +400,8 @@ export class VaultIndex {
     this.snapshot = freezeSnapshot(
       [...this.rootFolders.values()],
       [...this.markdownFiles.values()],
-      [...this.deerNotes.values()]
+      [...this.deerNotes.values()],
+      [...this.browseFiles.values()]
     );
     for (const listener of this.listeners) {
       listener(this.snapshot);
@@ -391,11 +419,13 @@ function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
 function freezeSnapshot(
   rootFolders: TFolder[],
   markdownFiles: TFile[],
-  deerNotes: IndexedDeerNote[]
+  deerNotes: IndexedDeerNote[],
+  browseFiles: TFile[] = markdownFiles
 ): VaultSnapshot {
   return Object.freeze({
     rootFolders: Object.freeze(rootFolders.map(folderDescriptor)),
     markdownFiles: Object.freeze(markdownFiles.map(fileDescriptor)),
+    browseFiles: Object.freeze(browseFiles.map(fileDescriptor)),
     deerNotes: Object.freeze(deerNotes.map(deerNoteDescriptor))
   });
 }
@@ -443,6 +473,10 @@ function markdownDescendants(folder: TFolder): TFile[] {
 
 function isMarkdownFile(entry: TAbstractFile): entry is TFile {
   return isFile(entry) && entry.extension.toLowerCase() === "md";
+}
+
+function isBrowseFile(entry: TAbstractFile): entry is TFile {
+  return isFile(entry) && ["md", "html", "htm", "png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(entry.extension.toLowerCase());
 }
 
 function isFile(entry: TAbstractFile): entry is TFile {

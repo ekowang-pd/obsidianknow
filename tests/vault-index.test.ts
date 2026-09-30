@@ -38,6 +38,10 @@ class MemoryIndexVault implements VaultIndexAdapter {
     ));
   }
 
+  getAllLoadedFiles(): TAbstractFile[] {
+    return [...this.entries.values()].filter(entry => "extension" in entry);
+  }
+
   async cachedRead(file: TFile): Promise<string> {
     this.reads.push(file.path);
     const content = (file as MemoryFile).content;
@@ -73,6 +77,14 @@ class MemoryIndexVault implements VaultIndexAdapter {
 
   addMarkdown(path: string, content: string): TFile {
     const file = this.makeFile(path, content);
+    this.entries.set(path, file);
+    this.refreshChildren();
+    return file;
+  }
+
+  addAsset(path: string): TFile {
+    const file = this.makeFile(path, "");
+    file.extension = path.split(".").pop() ?? "";
     this.entries.set(path, file);
     this.refreshChildren();
     return file;
@@ -375,6 +387,7 @@ describe("VaultIndex", () => {
 
     expect(index.getSnapshot().markdownFiles.map((file) => file.path)).toEqual(["小鹿笔记/原文.md"]);
     expect(index.getSnapshot().deerNotes.map((file) => file.path)).toEqual(["小鹿笔记/原文.md"]);
+    expect(index.getSnapshot().browseFiles?.map((file) => file.path)).toEqual(["小鹿笔记/原文.md"]);
   });
 
   it("removes the old entry when a Markdown file is renamed to a non-Markdown path", async () => {
@@ -483,5 +496,20 @@ describe("VaultIndex", () => {
 
     expect(beforeRename.markdownFiles[0]?.path).toBe("小鹿笔记/a.md");
     expect(index.getSnapshot().markdownFiles[0]?.path).toBe("小鹿笔记/b.md");
+  });
+
+  it("indexes images and HTML in folders without reading their binary bodies, including updates", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("项目");
+    const html = vault.addAsset("项目/index.html");
+    const image = vault.addAsset("项目/cover.png");
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    expect(index.getSnapshot().browseFiles?.map(file => file.path)).toEqual([html.path, image.path]);
+    expect(vault.reads).toEqual([]);
+    await vault.emitRename(image, "项目/cover.png", "项目/new.webp");
+    expect(index.getSnapshot().browseFiles?.map(file => file.path)).toEqual([html.path, "项目/new.webp"]);
+    await vault.emitDelete(html);
+    expect(index.getSnapshot().browseFiles?.map(file => file.path)).toEqual(["项目/new.webp"]);
   });
 });

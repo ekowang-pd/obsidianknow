@@ -17,7 +17,7 @@ function setup() {
   const file = { path: "docs/source.md", basename: "source", extension: "md" };
   const openFile = vi.fn(async (_file: unknown) => {});
   const app = {
-    vault: { getAbstractFileByPath: vi.fn(() => file), cachedRead: vi.fn(async () => "first\n\nsecond") },
+    vault: { getAbstractFileByPath: vi.fn(() => file), cachedRead: vi.fn(async () => "first\n\nsecond"), getResourcePath: vi.fn(() => "app://local/image.png"), process: vi.fn(async (_file: unknown, transform: (value: string) => string) => transform("first\n\nsecond")) },
     workspace: { getLeaf: vi.fn(() => ({ openFile })), openLinkText: vi.fn(async () => {}) }
   };
   const notes = { saveExcerptNote: vi.fn(async (_input: unknown) => file) };
@@ -36,6 +36,37 @@ function setup() {
 }
 
 describe("ReaderController", () => {
+  it("edits Markdown in place and saves only when the live file still matches", async () => {
+    const ui = setup(); await ui.reader.open("docs/source.md");
+    ui.button("编辑原文").click();
+    const editor = ui.host.querySelector<HTMLTextAreaElement>(".deer-reader-editor")!;
+    editor.value = "updated Markdown";
+    ui.button("保存修改").click(); await flush();
+    expect(ui.app.vault.process).toHaveBeenCalledWith(ui.file, expect.any(Function));
+    expect(ui.host.querySelector(".deer-reader-editor")).toBeNull();
+    expect(ui.host.querySelector(".deer-reader-content")?.textContent).toBe("updated Markdown");
+    ui.button("编辑原文").click();
+    ui.host.querySelector<HTMLTextAreaElement>(".deer-reader-editor")!.value = "another edit";
+    ui.app.vault.process.mockImplementationOnce(async (_file, transform) => transform("external change"));
+    ui.button("保存修改").click(); await flush();
+    expect(ui.host.querySelector<HTMLTextAreaElement>(".deer-reader-editor")?.value).toBe("another edit");
+    expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("别处修改");
+  });
+
+  it("shows images and sanitizes HTML instead of executing embedded content", async () => {
+    const ui = setup();
+    ui.file.extension = "png";
+    await ui.reader.open("docs/cover.png");
+    expect(ui.host.querySelector<HTMLImageElement>(".deer-reader-image")?.src).toContain("app://local/image.png");
+    expect(ui.app.vault.cachedRead).not.toHaveBeenCalled();
+    ui.file.extension = "html";
+    ui.app.vault.cachedRead.mockResolvedValueOnce('<h1>Page</h1><script>window.bad=true</script><img src="https://example.com/tracker.png"><a href="https://example.com">Click</a>');
+    await ui.reader.open("docs/page.html");
+    expect(ui.host.querySelector(".deer-reader-content h1")?.textContent).toBe("Page");
+    expect(ui.host.querySelector(".deer-reader-content script")).toBeNull();
+    expect(ui.host.querySelector(".deer-reader-content img")?.hasAttribute("src")).toBe(false);
+    expect(ui.host.querySelector(".deer-reader-content a")?.hasAttribute("href")).toBe(false);
+  });
   it("hides the source without changing the saved excerpt and supports shortcut save outside IME composition", async () => {
     const ui = setup(); await ui.reader.open("docs/source.md");
     ui.select().dispatchEvent(new Event("pointerup", { bubbles: true })); ui.button("做笔记").click();

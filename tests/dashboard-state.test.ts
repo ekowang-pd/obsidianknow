@@ -44,6 +44,19 @@ describe("DashboardState", () => {
     expect(state.visibleFiles).toEqual(snapshot.markdownFiles);
   });
 
+  it("shows supported assets only inside selected folders and searches image names without reading binary data", async () => {
+    const image = { ...file("01 收件箱/a.md"), path: "01 收件箱/photo.png", name: "photo.png", basename: "photo", extension: "png" };
+    const html = { ...image, path: "01 收件箱/page.html", name: "page.html", basename: "page", extension: "html" };
+    const read = vi.fn(async () => "knowledge content");
+    const state = new DashboardState({ ...snapshot, browseFiles: [...snapshot.markdownFiles, image, html] }, DEFAULT_SETTINGS, read);
+    expect(state.visibleFiles.every(file => file.extension === "md")).toBe(true);
+    state.selectFolder("01 收件箱");
+    expect(state.visibleFiles.map(file => file.path)).toContain(image.path);
+    await state.setSearchQuery("photo");
+    expect(state.visibleFiles.map(file => file.path)).toEqual([image.path]);
+    expect(read).not.toHaveBeenCalledWith(image.path);
+  });
+
   it("falls back when a selected folder disappears or is hidden by new settings", () => {
     const state = new DashboardState(snapshot, DEFAULT_SETTINGS);
     state.selectFolder("01 收件箱");
