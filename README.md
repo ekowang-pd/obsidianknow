@@ -4,9 +4,9 @@
 
 Deer Notes brings quick capture, a readable Markdown library, and source-linked excerpts into one Obsidian dashboard. Use it when you want to move from collecting passages to writing your own explanations, connections, and next steps. Your notes remain ordinary Markdown files in your vault.
 
-**Current release: 0.3.5.** Includes in-dashboard Markdown editing and folder browsing for Markdown, HTML, and image files, alongside quick capture, source-linked excerpts, reflection prompts, and hide-and-explain. GitHub release availability and Obsidian community review are separate; check the community listing for review status.
+**Current release: 0.3.6.** Includes in-dashboard Markdown editing and folder browsing for Markdown, HTML, and image files, alongside quick capture, source-linked excerpts, reflection prompts, and hide-and-explain. GitHub release availability and Obsidian community review are separate; check the community listing for review status.
 
-[Download 0.3.5](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.3.5) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
+[Download 0.3.6](https://github.com/ekowang-pd/obsidianknow/releases/tag/0.3.6) · [Report an issue](https://github.com/ekowang-pd/obsidianknow/issues)
 
 ## A simple reading-to-understanding workflow
 
@@ -68,7 +68,7 @@ Growth charts use creation dates of existing files; imports, copies, and deletio
 
 小鹿笔记把快速记录、已有知识库浏览、阅读和选文摘录放在同一个界面。适合希望从“收藏一句话”进一步走到“解释它、联系经验、试着应用”的用户。
 
-**当前正式发布版本为 0.3.5，市场审核状态请以社区页面为准。** 目录可同时浏览 Markdown、HTML 和图片；Markdown、HTML 可在阅读页编辑原文。上面的四张图依次展示目录浏览、阅读、写下自己的理解，以及隐藏原文后复述。
+**当前正式发布版本为 0.3.6，市场审核状态请以社区页面为准。** 目录可同时浏览 Markdown、HTML 和图片；Markdown、HTML 可在阅读页编辑原文。上面的四张图依次展示目录浏览、阅读、写下自己的理解，以及隐藏原文后复述。
 
 1. 在“全部笔记”中找到已有 Markdown，或在目录中查看 Markdown、HTML 和图片；搜索支持标题、路径、标签及文档正文。
 2. 打开文章、选中文字，点击“做笔记”；原文与自己的笔记分开保存，并保留来源。
