@@ -345,7 +345,7 @@ export class DeerNotesView extends ItemView {
       return;
     }
     const list = this.element(this.results, "ul", "deer-note-list");
-    const excerpts: { path: string; mtime: number; title: string; tags: readonly string[]; element: HTMLElement; more: HTMLElement }[] = [];
+    const excerpts: { path: string; mtime: number; title: string; tags: readonly string[]; element: HTMLElement; content: HTMLElement; footer: HTMLElement; meta: HTMLElement; more: HTMLElement }[] = [];
     for (const file of files) {
       const row = this.element(list, "li", "deer-note-row");
       const extension = file.extension.toLowerCase();
@@ -364,9 +364,11 @@ export class DeerNotesView extends ItemView {
       setFilledIcon(icon, ["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extension) ? "image" : extension === "md" ? "notebook" : "file-text");
       this.element(heading, "span", "deer-note-title", title);
       if (extension !== "md") this.element(heading, "span", "deer-file-type", extension.toUpperCase());
-      this.element(button, "span", "deer-note-date", modified);
-      const excerpt = this.element(button, "span", "deer-note-summary");
-      const meta = this.element(button, "span", "deer-note-meta");
+      this.element(heading, "span", "deer-note-date", modified);
+      const content = this.element(button, "span", "deer-note-content");
+      const excerpt = this.element(content, "span", "deer-note-summary");
+      const footer = this.element(button, "span", "deer-note-footer");
+      const meta = this.element(footer, "span", "deer-note-meta");
       if ("source" in file) {
         if (file.tags.length) this.element(meta, "span", "deer-tags", file.tags.map(tag => `#${tag}`).join("  "));
         if (file.source) this.element(meta, "span", "deer-note-source", this.t("来自 {0}", file.source.split("/").pop()?.replace(/\.md$/i, "")));
@@ -374,17 +376,25 @@ export class DeerNotesView extends ItemView {
         this.element(meta, "span", "deer-note-path", file.path.split("/").slice(0, -1).join(" / ") || this.t("根目录"));
       }
       meta.hidden = !meta.children.length;
-      const more = this.element(button, "span", "deer-note-open", this.t("阅读全文"));
+      const more = this.element(footer, "span", "deer-note-open", this.t("阅读全文"));
       more.hidden = true;
+      footer.hidden = meta.hidden;
       if (["png", "jpg", "jpeg", "gif", "webp", "svg", "avif"].includes(extension)) {
-        const image = this.element(button, "img", "deer-note-cover deer-file-image");
+        const image = this.element(content, "img", "deer-note-cover deer-file-image");
         image.alt = title; image.loading = "lazy";
         const source = this.app.vault.getAbstractFileByPath(file.path);
         const url = this.resolveCover?.(file.path, file.path) ?? (source && "extension" in source ? this.app.vault.getResourcePath(source as TFile) : undefined);
-        if (url) image.src = url;
-        else image.remove();
+        if (url) {
+          image.src = url;
+          button.classList.add("deer-note-link--image-only");
+          content.classList.add("deer-note-content--image-only");
+          image.addEventListener("error", () => { image.remove(); content.hidden = true; }, { once: true });
+          more.textContent = this.t("查看图片");
+          more.hidden = false;
+          footer.hidden = false;
+        } else { image.remove(); content.hidden = true; }
         excerpt.hidden = true;
-      } else excerpts.push({ path: file.path, mtime: file.mtime, title, tags: "tags" in file ? file.tags : [], element: excerpt, more });
+      } else excerpts.push({ path: file.path, mtime: file.mtime, title, tags: "tags" in file ? file.tags : [], element: excerpt, content, footer, meta, more });
     }
     let next = 0;
     const fill = async () => {
@@ -412,16 +422,22 @@ export class DeerNotesView extends ItemView {
                   const image = item.element.ownerDocument.createElement("img");
                   image.className = "deer-note-cover"; image.alt = cover.alt;
                   image.loading = "lazy"; image.decoding = "async";
-                  image.addEventListener("error", () => image.remove(), { once: true });
+                  image.addEventListener("error", () => { image.remove(); item.content.classList.remove("deer-note-content--with-image"); }, { once: true });
                   image.src = url;
-                  item.element.parentElement?.insertBefore(image, item.element);
+                  item.content.insertBefore(image, item.element);
+                  item.content.classList.add("deer-note-content--with-image");
                 }
               } catch { /* A missing attachment must not hide the note text. */ }
             }
-            const summary = noteSummary(isHtml ? DOMPurify.sanitize(body, { ALLOWED_TAGS: [], ALLOWED_ATTR: [] }) : body, item.title, item.tags);
+            const readableBody = isHtml
+              ? DOMPurify.sanitize(body.replace(/<\/?(?:address|article|blockquote|br|div|h[1-6]|li|ol|p|section|table|td|th|tr|ul)\b[^>]*>/gi, "\n"), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] })
+              : body;
+            const summary = noteSummary(readableBody, item.title, item.tags);
             item.element.textContent = summary;
             item.element.hidden = !summary;
+            item.content.hidden = !summary && !item.content.classList.contains("deer-note-content--with-image");
             item.more.hidden = summary.length < 140 && summary.split("\n").length < 5;
+            item.footer.hidden = item.meta.hidden && item.more.hidden;
           }
         } catch {
           if (this.summaryCache.get(item.path) === cached) this.summaryCache.delete(item.path);

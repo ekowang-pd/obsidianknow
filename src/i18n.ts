@@ -45,6 +45,7 @@ const english: Record<string, string> = {
   "这里还没有笔记，先记录一个想法吧。": "No notes here yet. Capture your first idea.",
   "根目录": "Vault root",
   "阅读全文": "Read more",
+  "查看图片": "View image",
   "文字": "text",
   "标签": "tag",
   "笔记已保存": "Note saved",

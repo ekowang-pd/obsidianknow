@@ -16,6 +16,8 @@ seed.push({ path: '项目灵感/下一版界面想法.md', content: '# 下一版
 seed.push({ path: '项目灵感/进行中/界面/目录导航.md', content: '# 目录导航\n\n展开左侧项目灵感，可以继续浏览进行中与界面子目录。' });
 seed.push({ path: '项目灵感/知识整理示例.html', content: '<h1>知识整理示例</h1><p>先记录，再用自己的话解释，最后找一个机会应用。</p><h2>三个动作</h2><ol><li>摘录原文</li><li>写下理解</li><li>尝试应用</li></ol>' });
 seed.push({ path: '项目灵感/知识路径.svg', content: '', dataUrl: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="360" viewBox="0 0 720 360"><rect width="720" height="360" rx="24" fill="#f3effb"/><circle cx="130" cy="180" r="54" fill="#7652bd"/><circle cx="360" cy="180" r="54" fill="#7652bd"/><circle cx="590" cy="180" r="54" fill="#7652bd"/><path d="M184 180h122m108 0h122" stroke="#7652bd" stroke-width="12" stroke-linecap="round"/><g fill="white" font-family="sans-serif" font-size="22" text-anchor="middle"><text x="130" y="188">记录</text><text x="360" y="188">理解</text><text x="590" y="188">应用</text></g></svg>')}` });
+seed.push({ path: '项目灵感/知识路径.png', content: '', dataUrl: '/knowledge-path.png' });
+seed.push({ path: '项目灵感/图文卡片示例.md', content: '# 图文卡片示例\n\n![[知识路径.png]]\n\n把资料转化为理解，可以从记录、解释和应用三个动作开始。' });
 for (const [index, body] of ['今天，从记录一个小想法开始。\n\n把脑海中一闪而过的念头留住，之后再慢慢整理。 #日常', '阅读之后，留一句自己的理解。\n\n连接已有的经验，比收集更多摘抄更重要。 #阅读', '让工具顺着思考的节奏工作。\n\n界面越清楚，越能把注意力留给内容。 #产品'].entries()) {
   const date = new Date(); date.setDate(date.getDate() - index * 3);
   const title = body.split('\n')[0]; seed.push({ path: `小鹿笔记/${title}.md`, content: createNoteMarkdown({ title, body, date }), ctime: date.getTime(), mtime: date.getTime() });
