@@ -270,6 +270,27 @@ describe("DeerNotesView", () => {
     expect(ui.root.ownerDocument.activeElement === ui.textarea()).toBe(true);
   });
 
+  it("expands nested folders separately from selection and keeps disclosure focus", async () => {
+    const folders = ["项目灵感", "项目灵感/进行中", "项目灵感/进行中/设计"].map(path => ({ path, name: path.split("/").at(-1)! }));
+    const ui = setup({ ...empty, rootFolders: [folders[0]], folders });
+    await ui.view.onOpen();
+    const toggle = ui.root.find(node => node.dataset.action === "toggle-folder" && node.dataset.folder === "项目灵感")[0];
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    toggle.focus();
+    toggle.click();
+    await flush();
+    const expanded = ui.root.find(node => node.dataset.action === "toggle-folder" && node.dataset.folder === "项目灵感")[0];
+    expect(expanded.getAttribute("aria-expanded")).toBe("true");
+    expect(ui.root.ownerDocument.activeElement).toBe(expanded);
+    expect(ui.action("notes").getAttribute("aria-current")).toBe("page");
+    const child = ui.root.find(node => node.dataset.action === "folder" && node.dataset.folder === "项目灵感/进行中")[0];
+    child.click();
+    await flush();
+    expect(ui.root.find(node => node.dataset.action === "folder" && node.dataset.folder === "项目灵感/进行中")[0].getAttribute("aria-current")).toBe("page");
+    expect(ui.root.find(node => node.dataset.action === "toggle-folder" && node.dataset.folder === "项目灵感/进行中")[0].getAttribute("aria-expanded")).toBe("true");
+    await ui.view.onClose();
+  });
+
   it("preserves a focused unselected navigation item when the sidebar refreshes", async () => {
     const folders = [{ path: "01 收件箱", name: "01 收件箱" }];
     const ui = setup({ ...empty, rootFolders: folders });

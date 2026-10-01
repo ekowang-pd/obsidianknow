@@ -11,6 +11,6 @@ if (process.argv.includes('--build')) {
   await context.rebuild(); await context.dispose();
 } else {
   await context.watch();
-  const server = await context.serve({ host: '127.0.0.1', port: 5173, servedir: 'preview/public' });
+  const server = await context.serve({ host: '127.0.0.1', port: Number(process.env.PORT ?? 5173), servedir: 'preview/public' });
   console.log(`Deer Notes browser preview: http://127.0.0.1:${server.port}`);
 }

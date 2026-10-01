@@ -5,6 +5,7 @@ import type { DeerNoteDescriptor, VaultFileDescriptor, VaultSnapshot } from "../
 
 export type DashboardSelection = { kind: "notes" } | { kind: "folder"; path: string } | { kind: "overview" };
 export interface DashboardNavItem { id: string; label: string; kind: DashboardSelection["kind"] }
+export interface DashboardFolderItem { path: string; label: string; children: DashboardFolderItem[] }
 export type DashboardFile = VaultFileDescriptor | DeerNoteDescriptor;
 export type ReadBody = (path: string) => Promise<string>;
 
@@ -30,6 +31,28 @@ export class DashboardState {
     ];
   }
 
+  get folderTree(): DashboardFolderItem[] {
+    const visibleRoots = buildRootNavigation(this.snapshot.rootFolders.map(folder => folder.path), this.settings);
+    const paths = new Set((this.snapshot.folders ?? this.snapshot.rootFolders).map(folder => folder.path));
+    const children = new Map<string, string[]>();
+    for (const path of paths) {
+      if (path.split("/").some(part => part.startsWith("."))) continue;
+      const parent = path.slice(0, path.lastIndexOf("/"));
+      if (!parent || !paths.has(parent)) continue;
+      const siblings = children.get(parent) ?? [];
+      siblings.push(path);
+      children.set(parent, siblings);
+    }
+    const make = (path: string): DashboardFolderItem => ({
+      path,
+      label: path.split("/").at(-1) ?? path,
+      children: (children.get(path) ?? [])
+        .sort((a, b) => a.localeCompare(b, "zh-CN", { numeric: true }))
+        .map(make)
+    });
+    return visibleRoots.map(root => make(root.path));
+  }
+
   get visibleFiles(): DashboardFile[] {
     const query = this.searchQuery.trim().toLocaleLowerCase();
     return this.candidates().filter(file => !query || this.matchesMetadata(file, query) || this.bodyMatches.has(file.path))
@@ -44,7 +67,8 @@ export class DashboardState {
 
   selectNotes(): void { this.select({ kind: "notes" }); }
   selectFolder(path: string): void {
-    this.select(this.navigation.some(item => item.kind === "folder" && item.id === path)
+    const contains = (items: DashboardFolderItem[]): boolean => items.some(item => item.path === path || contains(item.children));
+    this.select(contains(this.folderTree)
       ? { kind: "folder", path } : { kind: "notes" });
   }
   selectOverview(): void { this.select({ kind: "overview" }); }

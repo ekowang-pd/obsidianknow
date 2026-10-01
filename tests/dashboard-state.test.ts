@@ -44,6 +44,19 @@ describe("DashboardState", () => {
     expect(state.visibleFiles).toEqual(snapshot.markdownFiles);
   });
 
+  it("builds sorted nested folders and scopes a child selection without exposing hidden branches", () => {
+    const folders = ["01 收件箱", "01 收件箱/子目录", "01 收件箱/子目录/深入", "01 收件箱/.缓存", "10 项目", "10 项目/版本 10", "10 项目/版本 2", "小鹿笔记/内部"]
+      .map(path => ({ path, name: path.split("/").at(-1)! }));
+    const state = new DashboardState({ ...snapshot, folders }, DEFAULT_SETTINGS);
+    expect(state.folderTree.map(folder => folder.path)).toEqual(["01 收件箱", "10 项目"]);
+    expect(state.folderTree[0].children[0].children[0].path).toBe("01 收件箱/子目录/深入");
+    expect(state.folderTree[1].children.map(folder => folder.label)).toEqual(["版本 2", "版本 10"]);
+    state.selectFolder("01 收件箱/子目录");
+    expect(state.visibleFiles.map(item => item.path)).toEqual(["01 收件箱/子目录/b.md"]);
+    state.selectFolder("01 收件箱/.缓存");
+    expect(state.selectedView).toEqual({ kind: "notes" });
+  });
+
   it("shows supported assets only inside selected folders and searches image names without reading binary data", async () => {
     const image = { ...file("01 收件箱/a.md"), path: "01 收件箱/photo.png", name: "photo.png", basename: "photo", extension: "png" };
     const html = { ...image, path: "01 收件箱/page.html", name: "page.html", basename: "page", extension: "html" };

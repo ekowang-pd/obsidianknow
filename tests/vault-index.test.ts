@@ -356,6 +356,24 @@ describe("VaultIndex", () => {
     expect(snapshots.at(-1)?.deerNotes.map((file) => file.path)).toEqual(["小鹿笔记/renamed.md"]);
   });
 
+  it("indexes empty nested folders and tracks their create, rename, and delete events", async () => {
+    const vault = new MemoryIndexVault();
+    vault.addFolder("项目灵感");
+    const child = vault.addFolder("项目灵感/进行中");
+    vault.addFolder("项目灵感/进行中/设计");
+    const index = new VaultIndex(vault, DEFAULT_SETTINGS);
+    await index.initialize();
+    expect(index.getSnapshot().folders?.map(folder => folder.path)).toEqual(["项目灵感", "项目灵感/进行中", "项目灵感/进行中/设计"]);
+    const newChild = vault.addFolder("项目灵感/完成");
+    await vault.emitCreate(newChild);
+    expect(index.getSnapshot().folders?.map(folder => folder.path)).toContain("项目灵感/完成");
+    await vault.emitFolderRename(child, "项目灵感/进行中", "项目灵感/归档");
+    expect(index.getSnapshot().folders?.map(folder => folder.path)).toContain("项目灵感/归档/设计");
+    expect(index.getSnapshot().folders?.map(folder => folder.path)).not.toContain("项目灵感/进行中");
+    await vault.emitDelete(newChild);
+    expect(index.getSnapshot().folders?.map(folder => folder.path)).not.toContain("项目灵感/完成");
+  });
+
   it("unsubscribes listeners and makes repeated initialization/disposal safe", async () => {
     const vault = new MemoryIndexVault();
     vault.addFolder("小鹿笔记");

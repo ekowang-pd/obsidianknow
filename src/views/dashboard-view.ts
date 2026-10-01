@@ -44,6 +44,7 @@ export class DeerNotesView extends ItemView {
   private revisitOpening = false;
   private revisitButton: HTMLButtonElement | null = null;
   private lastRevisitPath?: string;
+  private expandedFolders = new Set<string>();
   private previewComponent: Component | null = null;
   private reader: ReaderController | null = null;
   private sidebar!: HTMLElement;
@@ -244,16 +245,40 @@ export class DeerNotesView extends ItemView {
     }
     this.element(activity, "p", "deer-heat-legend", this.t("近 91 天 · 最近修改记录"));
     nav.setAttribute("aria-label", this.t("笔记导航"));
-    for (const item of this.state.navigation) {
-      const button = this.button(nav, item.label, item.kind === "folder" ? "folder" : item.kind === "notes" ? "notebook" : "chart-no-axes-combined", item.kind);
-      if (item.kind === "folder") button.dataset.folder = item.id;
+    const rememberFocus = (button: HTMLButtonElement): void => {
       if (focusedNav?.dataset.action === button.dataset.action && focusedNav?.dataset.folder === button.dataset.folder) focusTarget = button;
-      const selected = this.state.selectedView;
-      if (selected.kind === item.kind && (selected.kind !== "folder" || selected.path === item.id)) {
+    };
+    const allNotes = this.state.navigation[0];
+    const notes = this.button(nav, allNotes.label, "notebook", "notes");
+    rememberFocus(notes);
+    if (this.state.selectedView.kind === "notes") { notes.setAttribute("aria-current", "page"); selectedButton = notes; }
+    const renderFolder = (parent: HTMLElement, item: import("./dashboard-state").DashboardFolderItem): void => {
+      const group = this.element(parent, "div", "deer-folder-node");
+      const row = this.element(group, "div", "deer-folder-row");
+      const button = this.button(row, item.label, "folder", "folder");
+      button.dataset.folder = item.path;
+      button.title = item.path;
+      rememberFocus(button);
+      if (this.state.selectedView.kind === "folder" && this.state.selectedView.path === item.path) {
         button.setAttribute("aria-current", "page");
         selectedButton = button;
       }
-    }
+      if (item.children.length) {
+        const toggle = this.button(row, this.expandedFolders.has(item.path) ? this.t("收起目录：{0}", item.label) : this.t("展开目录：{0}", item.label), "", "toggle-folder", true);
+        toggle.className = "deer-folder-toggle";
+        toggle.dataset.folder = item.path;
+        toggle.setAttribute("aria-expanded", String(this.expandedFolders.has(item.path)));
+        rememberFocus(toggle);
+        const children = this.element(group, "div", "deer-folder-children");
+        children.hidden = !this.expandedFolders.has(item.path);
+        for (const child of item.children) renderFolder(children, child);
+      }
+    };
+    const folderTree = this.element(nav, "div", "deer-folder-tree");
+    for (const item of this.state.folderTree) renderFolder(folderTree, item);
+    const overview = this.button(nav, this.t("知识概览"), "chart-no-axes-combined", "overview");
+    rememberFocus(overview);
+    if (this.state.selectedView.kind === "overview") { overview.setAttribute("aria-current", "page"); selectedButton = overview; }
     const revisit = this.button(nav, this.t("随机重读"), "dice", "revisit");
     this.revisitButton = revisit;
     revisit.className = "deer-button deer-revisit-nav";
@@ -441,9 +466,19 @@ export class DeerNotesView extends ItemView {
         this.renderResults();
         this.results.querySelector<HTMLButtonElement>(`button[data-days="${days}"]`)?.focus();
       }
+    } else if (action === "toggle-folder") {
+      const path = button.dataset.folder!;
+      if (this.expandedFolders.has(path)) this.expandedFolders.delete(path);
+      else this.expandedFolders.add(path);
+      this.renderSidebar();
     } else if (action === "notes" || action === "folder" || action === "overview") {
       if (action === "notes") this.state.selectNotes();
-      else if (action === "folder") this.state.selectFolder(button.dataset.folder!);
+      else if (action === "folder") {
+        const path = button.dataset.folder!;
+        this.state.selectFolder(path);
+        for (const ancestor of path.split("/").slice(0, -1).map((_, i, parts) => parts.slice(0, i + 1).join("/"))) this.expandedFolders.add(ancestor);
+        this.expandedFolders.add(path);
+      }
       else this.state.selectOverview();
       this.renderSidebar();
       await this.refreshSearch();

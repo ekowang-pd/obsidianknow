@@ -43,6 +43,7 @@ export interface DeerNoteDescriptor extends VaultFileDescriptor {
 
 export interface VaultSnapshot {
   readonly rootFolders: readonly VaultFolderDescriptor[];
+  readonly folders?: readonly VaultFolderDescriptor[];
   readonly markdownFiles: readonly VaultFileDescriptor[];
   readonly browseFiles?: readonly VaultFileDescriptor[];
   readonly deerNotes: readonly DeerNoteDescriptor[];
@@ -67,6 +68,7 @@ interface FileState {
 export class VaultIndex {
   private readonly notesFolder: string;
   private readonly rootFolders = new Map<string, TFolder>();
+  private readonly folders = new Map<string, TFolder>();
   private readonly markdownFiles = new Map<string, TFile>();
   private readonly browseFiles = new Map<string, TFile>();
   private readonly deerNotes = new Map<string, IndexedDeerNote>();
@@ -126,15 +128,20 @@ export class VaultIndex {
 
   private async scan(lifecycle: number): Promise<void> {
     const rootFolders = new Map<string, TFolder>();
+    const folders = new Map<string, TFolder>();
     const markdownFiles = new Map<string, TFile>();
     const browseFiles = new Map<string, TFile>();
     const deerNotes = new Map<string, IndexedDeerNote>();
 
-    for (const child of this.vault.getRoot().children) {
-      if (isFolder(child)) {
-        rootFolders.set(child.path, child);
+    const visit = (folder: TFolder): void => {
+      for (const child of folder.children) {
+        if (!isFolder(child)) continue;
+        folders.set(child.path, child);
+        if (isRootFolder(child.path)) rootFolders.set(child.path, child);
+        visit(child);
       }
-    }
+    };
+    visit(this.vault.getRoot());
     const markdown = this.vault.getMarkdownFiles();
     for (const file of markdown) {
       const read = await this.readDeerNote(file);
@@ -156,6 +163,7 @@ export class VaultIndex {
     }
 
     replaceMap(this.rootFolders, rootFolders);
+    replaceMap(this.folders, folders);
     replaceMap(this.markdownFiles, markdownFiles);
     replaceMap(this.browseFiles, browseFiles);
     replaceMap(this.deerNotes, deerNotes);
@@ -205,8 +213,13 @@ export class VaultIndex {
     if (!this.isActive(lifecycle)) {
       return;
     }
-    if (isFolder(entry) && isRootFolder(entry.path)) {
-      this.rootFolders.set(entry.path, entry);
+    if (isFolder(entry)) {
+      const visit = (folder: TFolder): void => {
+        this.folders.set(folder.path, folder);
+        if (isRootFolder(folder.path)) this.rootFolders.set(folder.path, folder);
+        for (const child of folder.children) if (isFolder(child)) visit(child);
+      };
+      visit(entry);
       this.publish();
       return;
     }
@@ -297,6 +310,13 @@ export class VaultIndex {
     }
 
     let changed = this.rootFolders.delete(oldPath);
+    for (const [path, indexed] of [...this.folders]) {
+      if (path === oldPath || path.startsWith(prefix)) {
+        this.folders.delete(path);
+        this.folders.set(indexed.path, indexed);
+        changed = true;
+      }
+    }
     if (isRootFolder(folder.path)) {
       this.rootFolders.set(folder.path, folder);
       changed = true;
@@ -373,6 +393,9 @@ export class VaultIndex {
   private removeFolder(path: string): boolean {
     let changed = this.rootFolders.delete(path);
     const prefix = `${path}/`;
+    for (const key of [...this.folders.keys()]) {
+      if (key === path || key.startsWith(prefix)) changed = this.folders.delete(key) || changed;
+    }
     for (const key of [...this.markdownFiles.keys()]) {
       if (key === path || key.startsWith(prefix)) {
         changed = this.removeFile(key) || changed;
@@ -401,7 +424,8 @@ export class VaultIndex {
       [...this.rootFolders.values()],
       [...this.markdownFiles.values()],
       [...this.deerNotes.values()],
-      [...this.browseFiles.values()]
+      [...this.browseFiles.values()],
+      [...this.folders.values()]
     );
     for (const listener of this.listeners) {
       listener(this.snapshot);
@@ -420,10 +444,12 @@ function freezeSnapshot(
   rootFolders: TFolder[],
   markdownFiles: TFile[],
   deerNotes: IndexedDeerNote[],
-  browseFiles: TFile[] = markdownFiles
+  browseFiles: TFile[] = markdownFiles,
+  folders: TFolder[] = rootFolders
 ): VaultSnapshot {
   return Object.freeze({
     rootFolders: Object.freeze(rootFolders.map(folderDescriptor)),
+    folders: Object.freeze(folders.map(folderDescriptor)),
     markdownFiles: Object.freeze(markdownFiles.map(fileDescriptor)),
     browseFiles: Object.freeze(browseFiles.map(fileDescriptor)),
     deerNotes: Object.freeze(deerNotes.map(deerNoteDescriptor))
