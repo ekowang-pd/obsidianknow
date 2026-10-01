@@ -53,7 +53,7 @@ describe("ReaderController", () => {
     expect(ui.host.querySelector('[role="alert"]')?.textContent).toContain("别处修改");
   });
 
-  it("shows images and sanitizes HTML instead of executing embedded content", async () => {
+  it("shows images and isolates interactive HTML while retaining a safe text mode", async () => {
     const ui = setup();
     ui.file.extension = "png";
     await ui.reader.open("docs/cover.png");
@@ -62,10 +62,32 @@ describe("ReaderController", () => {
     ui.file.extension = "html";
     ui.app.vault.cachedRead.mockResolvedValueOnce('<h1>Page</h1><script>window.bad=true</script><img src="https://example.com/tracker.png"><a href="https://example.com">Click</a>');
     await ui.reader.open("docs/page.html");
+    const frame = ui.host.querySelector<HTMLIFrameElement>(".deer-reader-html-frame")!;
+    expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame.referrerPolicy).toBe("no-referrer");
+    expect(frame.srcdoc).toContain("connect-src 'none'");
+    expect(frame.srcdoc).toContain('<script>window.bad=true</script>');
+    expect(ui.host.querySelector(".deer-reader-content script")).toBeNull();
+    ui.button("阅读文本").click();
     expect(ui.host.querySelector(".deer-reader-content h1")?.textContent).toBe("Page");
     expect(ui.host.querySelector(".deer-reader-content script")).toBeNull();
     expect(ui.host.querySelector(".deer-reader-content img")?.hasAttribute("src")).toBe(false);
     expect(ui.host.querySelector(".deer-reader-content a")?.hasAttribute("href")).toBe(false);
+    ui.button("交互预览").click();
+    expect(ui.host.querySelector(".deer-reader-html-frame")).not.toBeNull();
+  });
+  it("keeps the HTML preview available after editing its source", async () => {
+    const ui = setup(); ui.file.extension = "html";
+    const initial = '<div id="app"></div><script>document.getElementById("app").textContent="Ready"</script>';
+    ui.app.vault.cachedRead.mockResolvedValueOnce(initial);
+    await ui.reader.open("docs/page.html");
+    ui.button("编辑原文").click();
+    const editor = ui.host.querySelector<HTMLTextAreaElement>(".deer-reader-editor")!;
+    editor.value = initial.replace("Ready", "Updated");
+    ui.app.vault.process.mockImplementationOnce(async (_file, transform) => transform(initial));
+    ui.button("保存修改").click(); await flush();
+    expect(ui.host.querySelector<HTMLIFrameElement>(".deer-reader-html-frame")?.srcdoc).toContain("Updated");
+    expect(ui.button("阅读文本").hidden).toBe(false);
   });
   it("hides the source without changing the saved excerpt and supports shortcut save outside IME composition", async () => {
     const ui = setup(); await ui.reader.open("docs/source.md");

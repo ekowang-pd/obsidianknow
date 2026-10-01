@@ -26,6 +26,7 @@ export class ReaderController {
   private saving = false;
   private original = "";
   private editInput: HTMLTextAreaElement | null = null;
+  private htmlTextMode = false;
 
   constructor(private app: App, private host: HTMLElement, private notes: () => NoteService, private language: () => Language = () => "zh-CN") {}
 
@@ -61,6 +62,9 @@ export class ReaderController {
     this.element(title, "span", "deer-sr-only", filePath);
     const open = this.element(header, "button", "deer-reader-external", this.t("在 Obsidian 中打开"));
     open.type = "button";
+    const htmlMode = this.element(header, "button", "deer-reader-html-mode", this.t("阅读文本"));
+    htmlMode.type = "button"; htmlMode.hidden = true;
+    htmlMode.title = this.t("交互预览只运行内嵌脚本与样式，外部资源不会加载。");
     const edit = this.element(header, "button", "deer-reader-edit", this.t("编辑原文"));
     edit.type = "button";
     edit.hidden = true;
@@ -79,7 +83,7 @@ export class ReaderController {
       const input = this.element(root, "textarea", "deer-reader-editor");
       input.setAttribute("aria-label", this.t(filePath.toLowerCase().endsWith(".md") ? "Markdown 原文" : "HTML 原文"));
       input.value = this.original; this.editInput = input;
-      content.hidden = true; edit.hidden = true; cancel.hidden = false; save.hidden = false;
+      content.hidden = true; edit.hidden = true; htmlMode.hidden = true; cancel.hidden = false; save.hidden = false;
       input.focus();
       this.listen(input, "keydown", event => {
         const key = event as KeyboardEvent;
@@ -90,7 +94,7 @@ export class ReaderController {
     });
     const endEdit = () => {
       this.editing = false; this.editInput?.remove(); this.editInput = null;
-      content.hidden = false; edit.hidden = false; cancel.hidden = true; save.hidden = true;
+      content.hidden = false; edit.hidden = false; htmlMode.hidden = !filePath.match(/\.html?$/i); cancel.hidden = true; save.hidden = true;
       edit.focus();
     };
     this.listen(cancel, "click", () => {
@@ -118,6 +122,12 @@ export class ReaderController {
       finally { this.saving = false; save.disabled = false; cancel.disabled = false; }
     };
     this.listen(save, "click", () => { void saveEdit(); });
+    this.listen(htmlMode, "click", () => {
+      this.htmlTextMode = !this.htmlTextMode;
+      htmlMode.textContent = this.t(this.htmlTextMode ? "交互预览" : "阅读文本");
+      this.renderHtml(this.original, filePath, content);
+      content.focus();
+    });
     this.listen(open, "click", () => {
       try { void this.app.workspace.getLeaf("tab").openFile(this.resolveFile(filePath)).catch(error => this.showError(error, revision)); }
       catch (error) { this.showError(error, revision); }
@@ -159,7 +169,7 @@ export class ReaderController {
         await this.renderMarkdown(markdown, filePath, content, title, revision);
       } else if (extension === "html" || extension === "htm") {
         this.original = markdown;
-        edit.hidden = false;
+        edit.hidden = false; htmlMode.hidden = false;
         this.renderHtml(markdown, filePath, content);
       } else {
         const image = this.element(content, "img", "deer-reader-image");
@@ -185,6 +195,7 @@ export class ReaderController {
     this.component?.unload(); this.component = null;
     this.root?.remove(); this.root = null; this.content = null;
     this.editing = false; this.editInput = null;
+    this.htmlTextMode = false;
     this.restoreBackground.splice(0).forEach(restore => restore());
     this.host.classList.remove("deer-reader-open");
     if (this.trigger?.isConnected) this.trigger.focus();
@@ -205,6 +216,9 @@ export class ReaderController {
     if (label) label.textContent = this.t("返回列表");
     const external = this.root.querySelector(".deer-reader-external");
     if (external) external.textContent = this.t("在 Obsidian 中打开");
+    const htmlMode = this.root.querySelector(".deer-reader-html-mode");
+    if (htmlMode) htmlMode.textContent = this.t(this.htmlTextMode ? "交互预览" : "阅读文本");
+    if (htmlMode) (htmlMode as HTMLElement).title = this.t("交互预览只运行内嵌脚本与样式，外部资源不会加载。");
     for (const [selector, label] of [[".deer-reader-edit", "编辑原文"], [".deer-reader-cancel", "取消编辑"], [".deer-reader-save", "保存修改"]]) {
       const button = this.root.querySelector(selector);
       if (button) button.textContent = this.t(label);
@@ -236,6 +250,22 @@ export class ReaderController {
   }
 
   private renderHtml(html: string, path: string, content: HTMLElement): void {
+    content.classList.toggle("deer-reader-content--html", !this.htmlTextMode);
+    if (!this.htmlTextMode) {
+      const frame = content.ownerDocument.createElement("iframe");
+      frame.className = "deer-reader-html-frame";
+      frame.title = this.t("HTML 交互预览");
+      // Keep vault HTML in an opaque origin; never grant access to the Obsidian window.
+      frame.setAttribute("sandbox", "allow-scripts");
+      frame.referrerPolicy = "no-referrer";
+      const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: app: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'";
+      const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}">`;
+      frame.srcdoc = /<head\b[^>]*>/i.test(html)
+        ? html.replace(/<head\b[^>]*>/i, match => `${match}${meta}`)
+        : `<!doctype html><html><head>${meta}</head><body>${html}</body></html>`;
+      content.replaceChildren(frame);
+      return;
+    }
     const safe = DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true, FORBID_TAGS: ["script", "style", "link", "iframe", "object", "embed", "form", "meta", "base", "video", "audio", "source", "picture", "svg", "math", "canvas"], FORBID_ATTR: ["style", "srcset"] });
     for (const image of Array.from(safe.querySelectorAll("img"))) {
       const src = image.getAttribute("src") ?? "";
