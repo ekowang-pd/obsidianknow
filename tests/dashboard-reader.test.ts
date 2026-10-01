@@ -87,6 +87,8 @@ it("revisits a visible note without changing the draft or search and prevents du
     const input = host.querySelector("textarea")!;
     input.value = "keep my thought"; input.dispatchEvent(new Event("input"));
     const button = host.querySelector<HTMLButtonElement>('[data-action="revisit"]')!;
+    expect(button.closest(".deer-navigation")).not.toBeNull();
+    expect(host.querySelector('.deer-results [data-action="revisit"]')).toBeNull();
     button.click(); button.click();
     expect(open).toHaveBeenCalledExactlyOnceWith("notes/a.md");
     expect(button.disabled).toBe(true);

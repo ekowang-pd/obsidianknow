@@ -22,6 +22,7 @@
 .deer-navigation .deer-button>.deer-icon { width:22px; padding:2px; }
 .deer-navigation .deer-button[aria-current="page"] { color:var(--text-on-accent,white); background:var(--interactive-accent); font-weight:500; }
 .deer-navigation .deer-button[data-action="overview"] { margin-top:16px; }
+.deer-navigation .deer-revisit-nav { margin-top:12px; }
 .deer-activity { margin-top:32px; padding:16px 8px 0; }
 .deer-statistics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:8px 0 20px; }
 .deer-statistic dt { min-height:3.2em; color:var(--text-muted); font-size:11px; }
@@ -166,7 +167,7 @@
  .deer-sidebar>.deer-muted { margin-bottom:16px; }
  .deer-navigation { flex-direction:row; flex-wrap:wrap; gap:4px; }
  .deer-navigation .deer-button { width:auto; min-height:40px; padding:8px 10px; font-size:13px; }
- .deer-navigation .deer-button[data-action="overview"] { margin-top:0; }
+ .deer-navigation .deer-button:is([data-action="overview"],[data-action="revisit"]) { margin-top:0; }
  .deer-activity { margin-top:12px; padding-top:8px; }
   .deer-heatmap,.deer-statistics { max-width:260px; }
  .deer-main { flex:1 0 100%; padding:24px 16px; }
@@ -265,6 +266,3 @@
 .deer-dashboard .deer-brand > .deer-icon { width:23px; height:22px; color:#7350b5; }
 
 .deer-results-heading { align-items:center; gap:12px; flex-wrap:wrap; }
-.deer-dashboard .deer-revisit { margin-right:auto; min-height:36px; padding:6px 10px; background:transparent; color:var(--text-muted); font-size:13px; }
-.deer-dashboard .deer-revisit:hover { background:var(--background-modifier-hover); color:var(--text-normal); }
-@media (pointer:coarse) { .deer-dashboard .deer-revisit { min-height:44px; } }

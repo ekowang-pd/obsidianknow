@@ -42,6 +42,7 @@ export class DeerNotesView extends ItemView {
   private searchRevision = 0;
   private searchPending = false;
   private revisitOpening = false;
+  private revisitButton: HTMLButtonElement | null = null;
   private lastRevisitPath?: string;
   private previewComponent: Component | null = null;
   private reader: ReaderController | null = null;
@@ -253,6 +254,13 @@ export class DeerNotesView extends ItemView {
         selectedButton = button;
       }
     }
+    const revisit = this.button(nav, this.t("随机重读"), "dice", "revisit");
+    this.revisitButton = revisit;
+    revisit.className = "deer-button deer-revisit-nav";
+    revisit.title = this.t("从当前列表随机打开一篇笔记");
+    revisit.hidden = this.state.selectedView.kind === "overview";
+    revisit.disabled = this.searchPending || this.revisitOpening || !this.state.visibleFiles.some(file => file.extension.toLowerCase() === "md");
+    if (focusedNav?.dataset.action === "revisit") focusTarget = revisit;
     if (focusedNav) (focusTarget ?? selectedButton)?.focus();
   }
 
@@ -306,12 +314,6 @@ export class DeerNotesView extends ItemView {
     }
     const files = this.state.visibleFiles;
     const heading = this.element(this.results, "div", "deer-results-heading");
-    if (files.length) {
-      const revisit = this.button(heading, this.t("随机重读"), "", "revisit");
-      revisit.className = "deer-revisit";
-      revisit.title = this.t("从当前列表随机打开一篇笔记");
-      revisit.disabled = this.searchPending || this.revisitOpening;
-    }
     this.element(heading, "p", "deer-result-count", this.t("{0} 条记录", files.length));
     if (!files.length) {
       this.element(this.results, "p", "deer-empty", this.state.searchQuery.trim() ? this.t("没有匹配的笔记，试试其他关键词。") : this.t("这里还没有笔记，先记录一个想法吧。"));
@@ -408,19 +410,26 @@ export class DeerNotesView extends ItemView {
   private async refreshSearch(): Promise<void> {
     const revision = ++this.searchRevision;
     this.searchPending = true;
+    this.updateRevisitButton();
     try {
       const pending = this.state.setSearchQuery(this.search.value);
       this.renderResults();
       await pending;
-      if (!this.closed && revision === this.searchRevision) { this.searchPending = false; this.renderResults(); }
+      if (!this.closed && revision === this.searchRevision) { this.searchPending = false; this.updateRevisitButton(); this.renderResults(); }
     } catch (error) {
       if (!this.closed && revision === this.searchRevision) {
         this.searchPending = false;
+        this.updateRevisitButton();
         this.renderResults();
         const message = this.element(this.results, "p", "deer-error", this.t("搜索未完成：{0}", errorMessage(error)));
         message.setAttribute("role", "alert");
       }
     }
+  }
+
+  private updateRevisitButton(): void {
+    const button = this.revisitButton;
+    if (button) button.disabled = this.searchPending || this.revisitOpening || !this.state.visibleFiles.some(file => file.extension.toLowerCase() === "md");
   }
 
   private async handleAction(button: HTMLButtonElement): Promise<void> {
@@ -446,7 +455,7 @@ export class DeerNotesView extends ItemView {
       button.disabled = true;
       try { await this.openFile(file.path); this.lastRevisitPath = file.path; }
       catch (error) { if (!this.closed) new Notice(this.t("无法打开笔记：{0}", errorMessage(error))); }
-      finally { this.revisitOpening = false; button.disabled = this.searchPending; }
+      finally { this.revisitOpening = false; this.updateRevisitButton(); }
     } else if (action === "open-file") {
       try { await this.openFile(button.dataset.path!); }
       catch (error) { if (!this.closed) new Notice(this.t("无法打开笔记：{0}", errorMessage(error))); }
